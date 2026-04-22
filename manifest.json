@@ -1,0 +1,12 @@
+{
+  "name": "Layercraft",
+  "id": "layercraft-personal",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["https://generativelanguage.googleapis.com"],
+    "reasoning": "Calls Gemini 2.5 Flash for AI-powered layer naming."
+  }
+}
