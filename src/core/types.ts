@@ -71,19 +71,47 @@ export type ScanStats = {
   durationMs: number;
 };
 
+export type TreeNode = {
+  id: string;
+  type: string;
+  name: string;
+  text?: string;
+  bbox: [number, number, number, number]; // [x, y, width, height]
+  children?: TreeNode[];
+};
+
+export type RenameCandidate = {
+  rootId: string;
+  rootName: string;
+  pngBase64: string;
+  tree: TreeNode;
+};
+
 export type UiToPluginMessage =
   | { type: 'ping' }
   | { type: 'get-settings' }
   | { type: 'save-settings'; payload: Settings }
   | { type: 'scan'; scope: Scope }
   | { type: 'apply'; fixIds: string[] }
-  | { type: 'jump-to-node'; nodeId: string };
+  | { type: 'jump-to-node'; nodeId: string }
+  | {
+      type: 'rename-results';
+      names: Record<string, string>;
+      fallbackIds: string[];
+    };
 
 export type PluginToUiMessage =
   | { type: 'pong' }
   | { type: 'settings'; payload: Settings }
   | { type: 'settings-saved' }
   | { type: 'scan-progress'; phase: 'walking' | 'analyzing' | 'done'; message?: string }
-  | { type: 'scan-result'; fixes: Fix[]; stats: ScanStats }
+  | {
+      type: 'scan-result';
+      fixes: Fix[];
+      stats: ScanStats;
+      renameCandidates: RenameCandidate[];
+      candidatesSkipped: number;
+    }
+  | { type: 'rename-fixes'; fixes: RenameFix[] }
   | { type: 'apply-result'; applied: number; failed: number }
   | { type: 'error'; message: string };

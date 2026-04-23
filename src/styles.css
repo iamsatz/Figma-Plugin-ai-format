@@ -493,6 +493,22 @@ button.link:focus-visible {
   flex-shrink: 0;
 }
 
+/* ── Naming progress bar ──────────────────────── */
+
+.naming-bar {
+  padding: 8px 16px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.naming-bar.warning {
+  color: var(--badge-amber);
+  background: color-mix(in srgb, var(--badge-amber) 14%, var(--bg));
+}
+
 /* ── Footer hint + discard ────────────────────── */
 
 .footer-hint {

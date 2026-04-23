@@ -1,36 +1,66 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { send, subscribe } from './bridge';
 import { FixList } from './FixList';
-import type { Fix, ScanStats, Scope } from '../core/types';
+import { renameWithGemini } from './api/gemini';
+import { fallbackNames } from './api/fallback-names';
+import type { Fix, RenameCandidate, ScanStats, Scope, Settings } from '../core/types';
 
 type Props = {
-  hasApiKey: boolean;
+  settings: Settings | null;
   onGoToSettings: () => void;
 };
 
 type ScanState =
   | { kind: 'idle' }
   | { kind: 'running' }
-  | { kind: 'done'; fixes: Fix[]; stats: ScanStats }
+  | { kind: 'done'; fixes: Fix[]; stats: ScanStats; candidatesSkipped: number }
   | { kind: 'applied'; applied: number; failed: number; totalFixes: number }
   | { kind: 'error'; message: string };
+
+type NamingState =
+  | { kind: 'none' }
+  | { kind: 'running'; processed: number; total: number }
+  | { kind: 'done'; added: number }
+  | { kind: 'fallback-no-key'; added: number }
+  | { kind: 'fallback-api-error'; added: number };
 
 // 'review' items are unchecked by default; all others are pre-checked.
 function defaultChecked(fixes: Fix[]): Set<string> {
   return new Set(fixes.filter((f) => f.confidence !== 'review').map((f) => f.id));
 }
 
-export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
+export function MainPanel({ settings, onGoToSettings }: Props) {
   const [scope, setScopeRaw] = useState<Scope>('selection');
   const [state, setState] = useState<ScanState>({ kind: 'idle' });
+  const [naming, setNaming] = useState<NamingState>({ kind: 'none' });
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const hasApiKey = Boolean(settings?.aiApiKey);
 
   useEffect(() => {
     return subscribe((msg) => {
       if (msg.type === 'scan-result') {
-        setState({ kind: 'done', fixes: msg.fixes, stats: msg.stats });
+        setState({
+          kind: 'done',
+          fixes: msg.fixes,
+          stats: msg.stats,
+          candidatesSkipped: msg.candidatesSkipped,
+        });
         setCheckedIds(defaultChecked(msg.fixes));
+        kickOffNaming(msg.renameCandidates);
+      } else if (msg.type === 'rename-fixes') {
+        if (msg.fixes.length === 0) return;
+        setState((prev) => {
+          if (prev.kind !== 'done') return prev;
+          return { ...prev, fixes: [...prev.fixes, ...msg.fixes] };
+        });
+        setCheckedIds((prev) => {
+          const next = new Set(prev);
+          for (const f of msg.fixes) if (f.confidence !== 'review') next.add(f.id);
+          return next;
+        });
       } else if (msg.type === 'apply-result') {
         setApplying(false);
         setState((prev) => ({
@@ -44,7 +74,73 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
         setApplying(false);
       }
     });
-  }, []);
+    // settings change is captured via closure below; subscribe stays stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings?.aiApiKey]);
+
+  async function kickOffNaming(candidates: RenameCandidate[]) {
+    if (candidates.length === 0) {
+      setNaming({ kind: 'none' });
+      return;
+    }
+
+    const apiKey = settings?.aiApiKey?.trim();
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setNaming({ kind: 'running', processed: 0, total: candidates.length });
+
+    const combined: Record<string, string> = {};
+    const fallbackIds = new Set<string>();
+    let sawApiError = false;
+
+    for (let i = 0; i < candidates.length; i++) {
+      if (controller.signal.aborted) return;
+      const candidate = candidates[i];
+      let aiOk = false;
+      if (apiKey) {
+        try {
+          const names = await renameWithGemini(apiKey, candidate.pngBase64, candidate.tree, controller.signal);
+          Object.assign(combined, names);
+          aiOk = true;
+        } catch {
+          if (controller.signal.aborted) return;
+          sawApiError = true;
+        }
+      }
+      if (!aiOk) {
+        const fallback = fallbackNames(candidate.tree);
+        for (const [id, name] of Object.entries(fallback)) {
+          combined[id] = name;
+          fallbackIds.add(id);
+        }
+      }
+      setNaming({ kind: 'running', processed: i + 1, total: candidates.length });
+    }
+
+    if (controller.signal.aborted) return;
+
+    const validNames: Record<string, string> = {};
+    for (const [id, name] of Object.entries(combined)) {
+      if (typeof name === 'string' && name.trim()) validNames[id] = name.trim();
+    }
+
+    send({
+      type: 'rename-results',
+      names: validNames,
+      fallbackIds: [...fallbackIds],
+    });
+
+    const count = Object.keys(validNames).length;
+    if (!apiKey) {
+      setNaming({ kind: 'fallback-no-key', added: count });
+    } else if (sawApiError) {
+      setNaming({ kind: 'fallback-api-error', added: count });
+    } else {
+      setNaming({ kind: 'done', added: count });
+    }
+  }
 
   function setScope(next: Scope) {
     if (next === scope) return;
@@ -52,18 +148,23 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
     if (state.kind !== 'idle' && state.kind !== 'running') {
       setState({ kind: 'idle' });
       setCheckedIds(new Set());
+      setNaming({ kind: 'none' });
     }
   }
 
   function runScan() {
+    abortRef.current?.abort();
     setState({ kind: 'running' });
     setCheckedIds(new Set());
+    setNaming({ kind: 'none' });
     send({ type: 'scan', scope });
   }
 
   function discard() {
+    abortRef.current?.abort();
     setState({ kind: 'idle' });
     setCheckedIds(new Set());
+    setNaming({ kind: 'none' });
   }
 
   function toggleFix(id: string) {
@@ -97,7 +198,7 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
     <div className="main-panel">
       {!hasApiKey && (
         <div className="banner">
-          AI naming needs a Gemini API key (Phase 4). Structural fixes work without it.
+          AI naming needs a Gemini API key. Structural fixes work without it.
           <button className="link" onClick={onGoToSettings}>Add key</button>
         </div>
       )}
@@ -136,6 +237,28 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
               {state.stats.framesScanned} frames · {state.stats.nodesWalked} nodes · {state.stats.durationMs}ms
             </span>
           </div>
+
+          {naming.kind === 'running' && (
+            <div className="naming-bar" role="status">
+              Naming layers… {naming.processed}/{naming.total}
+            </div>
+          )}
+          {naming.kind === 'fallback-no-key' && (
+            <div className="naming-bar warning" role="status">
+              No Gemini key — used content-based names ({naming.added} added).{' '}
+              <button className="link" onClick={onGoToSettings}>Add key</button>
+            </div>
+          )}
+          {naming.kind === 'fallback-api-error' && (
+            <div className="naming-bar warning" role="status">
+              AI naming unavailable — used content-based names instead ({naming.added} added).
+            </div>
+          )}
+          {state.candidatesSkipped > 0 && (
+            <div className="naming-bar warning" role="status">
+              Skipped {state.candidatesSkipped} large / over-limit frame{state.candidatesSkipped === 1 ? '' : 's'} during naming.
+            </div>
+          )}
 
           <div className="fix-list-container">
             <FixList fixes={fixes} checkedIds={checkedIds} onToggle={toggleFix} />

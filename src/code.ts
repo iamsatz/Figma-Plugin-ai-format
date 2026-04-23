@@ -1,4 +1,4 @@
-import type { Fix, PluginToUiMessage, UiToPluginMessage } from './core/types';
+import type { Fix, PluginToUiMessage, RenameFix, UiToPluginMessage } from './core/types';
 import { getSettings, saveSettings } from './utils/storage';
 import { scan } from './core/scan';
 import { applyFixes } from './core/apply';
@@ -29,8 +29,14 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
         send({ type: 'scan-progress', phase: 'walking' });
         const result = await scan(msg.scope, settings);
         lastFixesById = new Map(result.fixes.map((f) => [f.id, f]));
-        console.log('[layercraft] scan', result.stats, result.fixes);
-        send({ type: 'scan-result', fixes: result.fixes, stats: result.stats });
+        console.log('[layercraft] scan', result.stats, result.fixes.length, 'fixes,', result.renameCandidates.length, 'rename candidates');
+        send({
+          type: 'scan-result',
+          fixes: result.fixes,
+          stats: result.stats,
+          renameCandidates: result.renameCandidates,
+          candidatesSkipped: result.candidatesSkipped,
+        });
         send({ type: 'scan-progress', phase: 'done' });
         return;
       }
@@ -54,8 +60,41 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
         }
         return;
       }
+      case 'rename-results': {
+        const fixes = await renameResultsToFixes(msg.names, new Set(msg.fallbackIds));
+        for (const f of fixes) lastFixesById.set(f.id, f);
+        send({ type: 'rename-fixes', fixes });
+        return;
+      }
     }
   } catch (err) {
     send({ type: 'error', message: err instanceof Error ? err.message : String(err) });
   }
 };
+
+async function renameResultsToFixes(
+  names: Record<string, string>,
+  fallbackIds: Set<string>,
+): Promise<RenameFix[]> {
+  const out: RenameFix[] = [];
+  for (const [nodeId, rawName] of Object.entries(names)) {
+    const newName = rawName.trim();
+    if (!newName) continue;
+    const node = await figma.getNodeByIdAsync(nodeId);
+    if (!node || node.type === 'DOCUMENT' || node.type === 'PAGE') continue;
+    if ('locked' in node && node.locked) continue;
+    if (node.name === newName) continue;
+    out.push({
+      id: `rename:${nodeId}`,
+      nodeId,
+      nodeName: node.name,
+      type: 'rename',
+      oldName: node.name,
+      newName,
+      // Fallback names are deterministic but shallow — keep them unchecked-by-
+      // default in the 'Apply High' bulk path so users review before applying.
+      confidence: fallbackIds.has(nodeId) ? 'medium' : 'high',
+    });
+  }
+  return out;
+}

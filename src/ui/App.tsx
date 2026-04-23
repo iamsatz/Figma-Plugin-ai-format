@@ -51,7 +51,7 @@ export function App() {
 
       <main className="panel">
         {tab === 'main' ? (
-          <MainPanel hasApiKey={Boolean(settings?.aiApiKey)} onGoToSettings={() => setTab('settings')} />
+          <MainPanel settings={settings} onGoToSettings={() => setTab('settings')} />
         ) : settings ? (
           <div className="settings-scroll">
             <SettingsPanel settings={settings} onSave={handleSave} />

@@ -1,10 +1,24 @@
-import type { Fix, Scope, ScanStats, Settings } from './types';
+import type { Fix, RenameCandidate, Scope, ScanStats, Settings } from './types';
 import type { FrameSnapshot, LayoutMode } from './snapshot';
 import { inferAutoLayout } from './infer-autolayout';
 import { snapValue, type SnapConfig } from './snap-spacing';
 import { desiredChildOrder, isAlreadyOrdered } from './reorder';
+import { buildTree } from '../utils/tree';
+import { nodeToPngBase64 } from '../utils/export';
 
-export type ScanResult = { fixes: Fix[]; stats: ScanStats };
+export type ScanResult = {
+  fixes: Fix[];
+  stats: ScanStats;
+  renameCandidates: RenameCandidate[];
+  candidatesSkipped: number;
+};
+
+// Cap candidates per scan to keep Gemini cost + latency bounded.
+const MAX_RENAME_CANDIDATES = 20;
+
+// Skip exporting frames this large — Figma caps exportAsync but huge PNGs
+// blow up payload size and token counts for Gemini.
+const MAX_EXPORT_DIMENSION = 4096;
 
 const CONTAINER_TYPES = new Set<NodeType>([
   'FRAME',
@@ -35,10 +49,53 @@ export async function scan(scope: Scope, settings: Settings): Promise<ScanResult
     });
   }
 
+  const { candidates, skipped } = await collectRenameCandidates(roots, ignore);
+
   return {
     fixes,
+    renameCandidates: candidates,
+    candidatesSkipped: skipped,
     stats: { framesScanned, nodesWalked, durationMs: Date.now() - started },
   };
+}
+
+async function collectRenameCandidates(
+  roots: readonly SceneNode[],
+  ignore: RegExp[],
+): Promise<{ candidates: RenameCandidate[]; skipped: number }> {
+  const candidates: RenameCandidate[] = [];
+  let skipped = 0;
+  for (const root of roots) {
+    if (!CONTAINER_TYPES.has(root.type)) continue;
+    if (isSkipped(root, ignore)) continue;
+    if ('children' in root && root.children.length === 0) continue;
+
+    if (candidates.length >= MAX_RENAME_CANDIDATES) {
+      skipped++;
+      continue;
+    }
+    if ('width' in root && 'height' in root) {
+      if (root.width > MAX_EXPORT_DIMENSION || root.height > MAX_EXPORT_DIMENSION) {
+        skipped++;
+        continue;
+      }
+    }
+
+    try {
+      const pngBase64 = await nodeToPngBase64(root);
+      const tree = buildTree(root as unknown as Parameters<typeof buildTree>[0]);
+      candidates.push({
+        rootId: root.id,
+        rootName: root.name,
+        pngBase64,
+        tree,
+      });
+    } catch (err) {
+      console.warn('[layercraft] failed to build rename candidate for', root.id, err);
+      skipped++;
+    }
+  }
+  return { candidates, skipped };
 }
 
 function collectRoots(scope: Scope): readonly SceneNode[] {
