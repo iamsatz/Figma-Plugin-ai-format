@@ -60,8 +60,6 @@ async function applyAutoLayout(fix: AutoLayoutFix): Promise<void> {
   frame.paddingRight = fix.padding[1];
   frame.paddingBottom = fix.padding[2];
   frame.paddingLeft = fix.padding[3];
-  frame.primaryAxisSizingMode = 'AUTO';
-  frame.counterAxisSizingMode = 'AUTO';
 }
 
 async function applySpacing(fix: SpacingFix): Promise<void> {
@@ -117,7 +115,6 @@ async function ensureFrame(node: SceneNode & ChildrenMixin): Promise<FrameNode |
     frame.x = group.x;
     frame.y = group.y;
     frame.resize(group.width, group.height);
-    frame.fills = [];
     frame.clipsContent = false;
     const insertionIndex = (parent as ChildrenMixin).children.indexOf(group);
     (parent as BaseNode & ChildrenMixin & { insertChild: (i: number, c: SceneNode) => void }).insertChild(

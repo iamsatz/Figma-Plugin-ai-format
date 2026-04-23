@@ -47,9 +47,10 @@ export function FixList({ fixes, checkedIds, onToggle, namingInProgress, applied
       {visible.map(({ key, label }) => {
         const group = fixes.filter((f) => f.type === key);
         const isCollapsed = collapsed.has(key);
-        const checkedCount = auditMode
-          ? (appliedIds ? group.filter((f) => appliedIds.has(f.id)).length : 0)
+        const pendingCount = auditMode
+          ? group.filter((f) => appliedIds!.has(f.id)).length
           : group.filter((f) => checkedIds.has(f.id)).length;
+        const showCount = group.length > 0;
 
         return (
           <section key={key} className="fix-group">
@@ -60,14 +61,14 @@ export function FixList({ fixes, checkedIds, onToggle, namingInProgress, applied
             >
               <span className="chevron">{isCollapsed ? '▶' : '▾'}</span>
               <span className="group-label">{label}</span>
-              <span className="group-count">
-                {auditMode ? `${checkedCount}/${group.length}` : `${checkedCount}/${group.length}`}
-              </span>
+              {showCount && (
+                <span className="group-count">{pendingCount}/{group.length}</span>
+              )}
             </button>
             {!isCollapsed && (
               <ul className="fix-group-items">
                 {group.length === 0 && namingInProgress ? (
-                  <li className="fix-item-placeholder" aria-live="polite">Naming layers…</li>
+                  <li className="fix-item-placeholder">Naming layers…</li>
                 ) : (
                   group.map((fix) => (
                     <FixItem

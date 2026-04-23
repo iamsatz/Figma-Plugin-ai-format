@@ -543,8 +543,8 @@ button.link:focus-visible {
 /* ── Scan skeleton ────────────────────────────── */
 
 @keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
+  0%   { background-position: -100% 0; }
+  100% { background-position:  100% 0; }
 }
 
 .scan-skeleton {
@@ -590,7 +590,7 @@ button.link:focus-visible {
 
 .fix-item--applied { opacity: 1; }
 .fix-item--failed  { opacity: 0.7; }
-.fix-item--skipped { opacity: 0.45; }
+.fix-item--skipped { opacity: 0.6; }
 
 .fix-status-icon {
   flex-shrink: 0;

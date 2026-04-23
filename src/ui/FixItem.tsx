@@ -30,10 +30,12 @@ export function FixItem({ fix, checked, onToggle, status }: Props) {
       className={`fix-item${status ? ` fix-item--${status}` : ''}`}
       onClick={handleRowClick}
       onKeyDown={handleRowKey}
+      tabIndex={auditMode ? 0 : undefined}
       title="Click to select and zoom to this layer in Figma"
+      aria-label={auditMode ? `${status}: ${label(fix)}` : undefined}
     >
       {auditMode ? (
-        <span className={`fix-status-icon fix-status-icon--${status}`} aria-label={status}>
+        <span className={`fix-status-icon fix-status-icon--${status}`} aria-hidden>
           {status === 'applied' ? '✓' : status === 'failed' ? '✗' : '–'}
         </span>
       ) : (

@@ -63,12 +63,15 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
         });
       } else if (msg.type === 'apply-result') {
         setApplying(false);
-        setState((prev) => ({
-          kind: 'applied',
-          fixes: prev.kind === 'done' ? prev.fixes : [],
-          appliedIds: new Set(msg.applied),
-          failedIds: new Set(msg.failed),
-        }));
+        setState((prev) => {
+          if (prev.kind !== 'done') return prev;
+          return {
+            kind: 'applied',
+            fixes: prev.fixes,
+            appliedIds: new Set(msg.applied),
+            failedIds: new Set(msg.failed),
+          };
+        });
       } else if (msg.type === 'error') {
         setState({ kind: 'error', message: msg.message });
         setApplying(false);
@@ -194,7 +197,7 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
 
   const fixes = state.kind === 'done' ? state.fixes : [];
   const highCount = useMemo(() => fixes.filter((f) => f.confidence === 'high').length, [fixes]);
-  const scanned = state.kind === 'done' || state.kind === 'applied';
+  const scanned = state.kind === 'done';
   const namingInProgress = naming.kind === 'running';
 
   return (
@@ -307,9 +310,11 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
             >
               Apply High ({highCount})
             </button>
-            <button className="link discard-link" onClick={discard} disabled={applying}>
-              Discard
-            </button>
+            {(fixes.length > 0 || namingInProgress) && (
+              <button className="link discard-link" onClick={discard} disabled={applying}>
+                Discard
+              </button>
+            )}
           </footer>
           <p className="footer-hint">⌘Z reverts all changes in one step.</p>
         </>
@@ -339,8 +344,8 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
 
           <footer className="action-footer">
             <button className="primary" onClick={runScan}>Scan again</button>
-            <p className="footer-hint" style={{ margin: 0, alignSelf: 'center' }}>⌘Z reverts all changes.</p>
           </footer>
+          <p className="footer-hint">⌘Z reverts all changes in one step.</p>
         </>
       )}
 
