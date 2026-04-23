@@ -74,7 +74,7 @@ function compileIgnore(patterns: string[]): RegExp[] {
     try {
       out.push(new RegExp(raw));
     } catch {
-      // swallow invalid regex; user sees nothing silently drop but we prefer safety
+      // swallow invalid regex silently — bad pattern drops rather than crashes
     }
   }
   return out;
@@ -99,6 +99,7 @@ function collectFixesForContainer(
       fixes.push({
         id: `al:${snapshot.id}`,
         nodeId: snapshot.id,
+        nodeName: snapshot.name,
         type: 'autolayout',
         direction: inferred.direction,
         itemSpacing: inferred.itemSpacing,
@@ -107,53 +108,23 @@ function collectFixesForContainer(
       });
     }
   } else {
-    pushSpacingFixIfNeeded(
-      snapshot.id,
-      'itemSpacing',
-      snapshot.itemSpacing,
-      snapValue(snapshot.itemSpacing, snap),
-      fixes,
-    );
-    pushSpacingFixIfNeeded(
-      snapshot.id,
-      'paddingTop',
-      snapshot.paddingTop,
-      snapValue(snapshot.paddingTop, snap),
-      fixes,
-    );
-    pushSpacingFixIfNeeded(
-      snapshot.id,
-      'paddingRight',
-      snapshot.paddingRight,
-      snapValue(snapshot.paddingRight, snap),
-      fixes,
-    );
-    pushSpacingFixIfNeeded(
-      snapshot.id,
-      'paddingBottom',
-      snapshot.paddingBottom,
-      snapValue(snapshot.paddingBottom, snap),
-      fixes,
-    );
-    pushSpacingFixIfNeeded(
-      snapshot.id,
-      'paddingLeft',
-      snapshot.paddingLeft,
-      snapValue(snapshot.paddingLeft, snap),
-      fixes,
-    );
+    pushSpacingFixIfNeeded(snapshot.id, snapshot.name, 'itemSpacing', snapshot.itemSpacing, snapValue(snapshot.itemSpacing, snap), fixes);
+    pushSpacingFixIfNeeded(snapshot.id, snapshot.name, 'paddingTop', snapshot.paddingTop, snapValue(snapshot.paddingTop, snap), fixes);
+    pushSpacingFixIfNeeded(snapshot.id, snapshot.name, 'paddingRight', snapshot.paddingRight, snapValue(snapshot.paddingRight, snap), fixes);
+    pushSpacingFixIfNeeded(snapshot.id, snapshot.name, 'paddingBottom', snapshot.paddingBottom, snapValue(snapshot.paddingBottom, snap), fixes);
+    pushSpacingFixIfNeeded(snapshot.id, snapshot.name, 'paddingLeft', snapshot.paddingLeft, snapValue(snapshot.paddingLeft, snap), fixes);
   }
 
   if (snapshot.children.length >= 2) {
     const desired = desiredChildOrder(snapshot.children, mode);
     if (!isAlreadyOrdered(snapshot.children, desired)) {
-      // In AL frames, child order == layout order, so reorder is safe.
-      // In NONE-mode frames, child order == z-order; changing it could move
-      // overlapping elements forward/back. Demote to 'medium' so bulk Apply
-      // (High-only) doesn't silently restack a canvas.
+      // In AL frames child order == layout order (safe to sort).
+      // In NONE-mode frames child order == z-order; sorting could restack
+      // overlapping elements visually, so demote to 'medium'.
       fixes.push({
         id: `order:${snapshot.id}`,
         nodeId: snapshot.id,
+        nodeName: snapshot.name,
         type: 'reorder',
         newChildOrder: desired,
         confidence: mode === 'NONE' ? 'medium' : 'high',
@@ -164,6 +135,7 @@ function collectFixesForContainer(
 
 function pushSpacingFixIfNeeded(
   nodeId: string,
+  nodeName: string,
   field: 'itemSpacing' | 'paddingTop' | 'paddingRight' | 'paddingBottom' | 'paddingLeft',
   current: number,
   next: number,
@@ -173,6 +145,7 @@ function pushSpacingFixIfNeeded(
   fixes.push({
     id: `spacing:${nodeId}:${field}`,
     nodeId,
+    nodeName,
     type: 'spacing',
     field,
     oldValue: current,

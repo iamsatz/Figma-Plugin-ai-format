@@ -45,6 +45,13 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
         send({ type: 'apply-result', applied: result.applied, failed: result.failed });
         return;
       }
+      case 'jump-to-node': {
+        const node = await figma.getNodeByIdAsync(msg.nodeId);
+        if (node && 'type' in node && node.type !== 'DOCUMENT' && node.type !== 'PAGE') {
+          figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
+        }
+        return;
+      }
     }
   } catch (err) {
     send({ type: 'error', message: err instanceof Error ? err.message : String(err) });

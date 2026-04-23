@@ -23,6 +23,7 @@ export type Confidence = 'high' | 'medium' | 'review';
 export type RenameFix = {
   id: string;
   nodeId: string;
+  nodeName: string;
   type: 'rename';
   oldName: string;
   newName: string;
@@ -32,6 +33,7 @@ export type RenameFix = {
 export type AutoLayoutFix = {
   id: string;
   nodeId: string;
+  nodeName: string;
   type: 'autolayout';
   direction: 'VERTICAL' | 'HORIZONTAL';
   itemSpacing: number;
@@ -42,6 +44,7 @@ export type AutoLayoutFix = {
 export type SpacingFix = {
   id: string;
   nodeId: string;
+  nodeName: string;
   type: 'spacing';
   field: 'itemSpacing' | 'paddingTop' | 'paddingRight' | 'paddingBottom' | 'paddingLeft';
   oldValue: number;
@@ -52,6 +55,7 @@ export type SpacingFix = {
 export type ReorderFix = {
   id: string;
   nodeId: string;
+  nodeName: string;
   type: 'reorder';
   newChildOrder: string[];
   confidence: 'high' | 'medium';
@@ -72,7 +76,8 @@ export type UiToPluginMessage =
   | { type: 'get-settings' }
   | { type: 'save-settings'; payload: Settings }
   | { type: 'scan'; scope: Scope }
-  | { type: 'apply'; fixIds: string[] };
+  | { type: 'apply'; fixIds: string[] }
+  | { type: 'jump-to-node'; nodeId: string };
 
 export type PluginToUiMessage =
   | { type: 'pong' }

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { send, subscribe } from './bridge';
+import { FixList } from './FixList';
 import type { Fix, ScanStats, Scope } from '../core/types';
 
 type Props = {
@@ -14,16 +15,22 @@ type ScanState =
   | { kind: 'applied'; applied: number; failed: number }
   | { kind: 'error'; message: string };
 
+// 'review' confidence items are unchecked by default; everything else is checked.
+function defaultChecked(fixes: Fix[]): Set<string> {
+  return new Set(fixes.filter((f) => f.confidence !== 'review').map((f) => f.id));
+}
+
 export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
-  const [scope, setScopeInternal] = useState<Scope>('selection');
+  const [scope, setScopeRaw] = useState<Scope>('selection');
   const [state, setState] = useState<ScanState>({ kind: 'idle' });
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
 
   useEffect(() => {
     return subscribe((msg) => {
       if (msg.type === 'scan-result') {
         setState({ kind: 'done', fixes: msg.fixes, stats: msg.stats });
-        console.log('[layercraft] scan result', msg.stats, msg.fixes);
+        setCheckedIds(defaultChecked(msg.fixes));
       } else if (msg.type === 'apply-result') {
         setApplying(false);
         setState({ kind: 'applied', applied: msg.applied, failed: msg.failed });
@@ -36,113 +43,121 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
 
   function setScope(next: Scope) {
     if (next === scope) return;
-    setScopeInternal(next);
-    // Stale fix counts from a previous scope would mislead — drop back to idle.
-    if (state.kind === 'done' || state.kind === 'applied' || state.kind === 'error') {
+    setScopeRaw(next);
+    if (state.kind !== 'idle' && state.kind !== 'running') {
       setState({ kind: 'idle' });
+      setCheckedIds(new Set());
     }
   }
 
   function runScan() {
     setState({ kind: 'running' });
+    setCheckedIds(new Set());
     send({ type: 'scan', scope });
   }
 
-  function applyAllHighConfidence() {
-    if (state.kind !== 'done') return;
-    const high = state.fixes.filter((f) => f.confidence === 'high').map((f) => f.id);
-    if (high.length === 0) return;
-    setApplying(true);
-    send({ type: 'apply', fixIds: high });
+  function toggleFix(id: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
+  function applySelected() {
+    if (state.kind !== 'done' || checkedIds.size === 0) return;
+    setApplying(true);
+    send({ type: 'apply', fixIds: [...checkedIds] });
+  }
+
+  function applyAllHigh() {
+    if (state.kind !== 'done') return;
+    const highIds = state.fixes.filter((f) => f.confidence === 'high').map((f) => f.id);
+    if (highIds.length === 0) return;
+    setApplying(true);
+    send({ type: 'apply', fixIds: highIds });
+  }
+
+  const fixes = state.kind === 'done' ? state.fixes : [];
+  const highCount = useMemo(() => fixes.filter((f) => f.confidence === 'high').length, [fixes]);
   const scanned = state.kind === 'done';
-  const scanLabel =
-    state.kind === 'running' ? 'Scanning...' : scanned ? 'Rescan' : 'Scan';
 
   return (
-    <div>
+    <div className="main-panel">
       {!hasApiKey && (
         <div className="banner">
-          AI naming needs a Gemini API key (Phase 4). You can still run structural fixes without it.
+          AI naming needs a Gemini API key (Phase 4). Structural fixes work without it.
           <button className="link" onClick={onGoToSettings}>Add key</button>
         </div>
       )}
 
-      <div className="field">
-        <label>Scope</label>
-        <div className="scope">
-          <label>
-            <input
-              type="radio"
-              name="scope"
-              checked={scope === 'selection'}
-              onChange={() => setScope('selection')}
-            />
-            Selection
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="scope"
-              checked={scope === 'page'}
-              onChange={() => setScope('page')}
-            />
-            Current page
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="scope"
-              checked={scope === 'file'}
-              onChange={() => setScope('file')}
-            />
-            Entire file
-          </label>
-        </div>
-      </div>
+      <div className="scope-bar">
+        <fieldset className="scope-fieldset">
+          <legend className="visually-hidden">Scope</legend>
+          {(['selection', 'page', 'file'] as Scope[]).map((s) => (
+            <label key={s} className={`scope-option${scope === s ? ' active' : ''}`}>
+              <input
+                type="radio"
+                name="scope"
+                value={s}
+                checked={scope === s}
+                onChange={() => setScope(s)}
+              />
+              {scopeLabel(s)}
+            </label>
+          ))}
+        </fieldset>
 
-      <div className="actions-inline">
         <button
           className={scanned ? 'secondary' : 'primary'}
           onClick={runScan}
           disabled={state.kind === 'running'}
         >
-          {scanLabel}
+          {state.kind === 'running' ? 'Scanning…' : scanned ? 'Rescan' : 'Scan'}
         </button>
       </div>
 
       {state.kind === 'done' && (
-        <div className="scan-summary">
-          <h3>{state.fixes.length} fixes found</h3>
-          <p className="hint">
-            {state.stats.framesScanned} frames / {state.stats.nodesWalked} nodes /{' '}
-            {state.stats.durationMs}ms
-          </p>
-          <ul className="count-list">
-            <li>Auto Layout: {count(state.fixes, 'autolayout')}</li>
-            <li>Spacing: {count(state.fixes, 'spacing')}</li>
-            <li>Reorder: {count(state.fixes, 'reorder')}</li>
-          </ul>
-          <p className="hint">Full preview UI with per-fix accept/reject lands in Phase 3.</p>
-          <button
-            className="primary"
-            disabled={applying || countConfidence(state.fixes, 'high') === 0}
-            onClick={applyAllHighConfidence}
-          >
-            {applying
-              ? 'Applying...'
-              : `Apply ${countConfidence(state.fixes, 'high')} High-confidence fixes`}
-          </button>
-        </div>
+        <>
+          <div className="scan-meta">
+            <span className="scan-meta-count">{fixes.length} fixes</span>
+            <span className="hint">
+              {state.stats.framesScanned} frames · {state.stats.nodesWalked} nodes · {state.stats.durationMs}ms
+            </span>
+          </div>
+
+          <div className="fix-list-container">
+            <FixList fixes={fixes} checkedIds={checkedIds} onToggle={toggleFix} />
+          </div>
+
+          <footer className="action-footer">
+            <button
+              className="primary"
+              disabled={applying || checkedIds.size === 0}
+              onClick={applySelected}
+            >
+              {applying ? 'Applying…' : `Apply Selected (${checkedIds.size})`}
+            </button>
+            <button
+              className="secondary"
+              disabled={applying || highCount === 0}
+              onClick={applyAllHigh}
+              title="Applies only High-confidence fixes, ignoring your current selection"
+            >
+              Apply All High ({highCount})
+            </button>
+          </footer>
+        </>
       )}
 
       {state.kind === 'applied' && (
         <div className="scan-summary applied">
           <h3>
-            {state.applied} applied{state.failed > 0 ? ` · ${state.failed} failed` : ''}
+            {state.applied} applied
+            {state.failed > 0 ? ` · ${state.failed} failed` : ''}
           </h3>
-          <p className="hint">Press Ctrl+Z (⌘Z on macOS) to revert everything in one step.</p>
+          <p className="hint">Press ⌘Z to revert all changes in one step.</p>
         </div>
       )}
 
@@ -156,10 +171,10 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
   );
 }
 
-function count(fixes: Fix[], type: Fix['type']): number {
-  return fixes.filter((f) => f.type === type).length;
-}
-
-function countConfidence(fixes: Fix[], confidence: Fix['confidence']): number {
-  return fixes.filter((f) => f.confidence === confidence).length;
+function scopeLabel(scope: Scope): string {
+  switch (scope) {
+    case 'selection': return 'Selection';
+    case 'page': return 'Page';
+    case 'file': return 'File';
+  }
 }
