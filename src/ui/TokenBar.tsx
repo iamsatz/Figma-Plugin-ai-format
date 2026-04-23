@@ -44,7 +44,6 @@ export function TokenBar(): JSX.Element | null {
 
   return (
     <div className="token-bar" title={tooltip}>
-      <span className="token-bar-dot" aria-hidden />
       <span className="token-bar-label">Tokens this session</span>
       <span className="token-bar-value">{formatNumber(total)}</span>
       <button

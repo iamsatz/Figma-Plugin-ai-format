@@ -22,6 +22,7 @@ export function App() {
       else if (msg.type === 'error') flashToast(msg.message);
       else if (msg.type === 'insert-svg-result') {
         if (msg.error) flashToast(`Insert failed: ${msg.error}`);
+        else flashToast('Icon inserted');
       }
     });
     send({ type: 'get-settings' });

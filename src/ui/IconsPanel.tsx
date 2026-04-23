@@ -12,11 +12,13 @@ type Props = {
   onGoToSettings: () => void;
 };
 
+type ResultsData = { names: string[]; svgs: Record<string, string> };
+
 type IconState =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'results'; names: string[]; svgs: Record<string, string> }
-  | { kind: 'error'; message: string };
+  | { kind: 'results'; data: ResultsData; loadingMore: boolean }
+  | { kind: 'error'; message: string; previous?: ResultsData };
 
 export function IconsPanel({ settings, onGoToSettings }: Props) {
   const [query, setQuery] = useState('');
@@ -25,6 +27,7 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
   const abortRef = useRef<AbortController | null>(null);
 
   const provider = settings?.aiProvider ?? 'gemini';
+  const providerLabel = provider === 'claude' ? 'Claude Haiku 4.5' : 'Gemini 2.5 Flash';
   const apiKey = provider === 'claude' ? settings?.claudeApiKey?.trim() : settings?.geminiApiKey?.trim();
   const hasApiKey = Boolean(apiKey);
 
@@ -32,13 +35,20 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
 
   async function search(reset: boolean) {
     if (!apiKey || !query.trim()) return;
+    if (state.kind === 'loading') return;
+    if (state.kind === 'results' && state.loadingMore) return;
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     if (reset) seenRef.current.clear();
 
-    setState({ kind: 'loading' });
+    if (reset || state.kind !== 'results') {
+      setState({ kind: 'loading' });
+    } else {
+      setState({ ...state, loadingMore: true });
+    }
 
     try {
       const exclude = [...seenRef.current];
@@ -51,7 +61,8 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
       for (const n of result.names) seenRef.current.add(n);
 
       if (result.names.length === 0) {
-        setState({ kind: 'error', message: 'No matches found — try a different search.' });
+        const previous = state.kind === 'results' ? state.data : undefined;
+        setState({ kind: 'error', message: 'No more matches — try a different search.', previous });
         return;
       }
 
@@ -67,11 +78,13 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
       );
       if (controller.signal.aborted) return;
 
-      setState({ kind: 'results', names: result.names.filter((n) => svgs[n]), svgs });
+      const fetched = result.names.filter((n) => svgs[n]);
+      setState({ kind: 'results', data: { names: fetched, svgs }, loadingMore: false });
     } catch (err) {
       if (controller.signal.aborted) return;
       const msg = provider === 'claude' ? friendlyClaudeError(err) : friendlyGeminiError(err);
-      setState({ kind: 'error', message: msg });
+      const previous = state.kind === 'results' ? state.data : undefined;
+      setState({ kind: 'error', message: msg, previous });
     }
   }
 
@@ -83,6 +96,14 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
     e.preventDefault();
     search(true);
   }
+
+  const currentResults = state.kind === 'results'
+    ? state.data
+    : state.kind === 'error'
+    ? state.previous
+    : undefined;
+  const isSearching =
+    state.kind === 'loading' || (state.kind === 'results' && state.loadingMore);
 
   return (
     <div className="icons-panel">
@@ -99,23 +120,27 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Describe an icon — e.g. 'user profile', 'cart', 'settings'"
-          disabled={!hasApiKey}
+          disabled={!hasApiKey || isSearching}
           aria-label="Icon search"
         />
         <button
           type="submit"
           className="primary"
-          disabled={!hasApiKey || !query.trim() || state.kind === 'loading'}
+          disabled={!hasApiKey || !query.trim() || isSearching}
         >
-          {state.kind === 'loading' ? 'Searching…' : 'Search'}
+          {isSearching ? 'Searching…' : 'Search'}
         </button>
       </form>
+
+      {hasApiKey && (
+        <div className="icons-provider-note">via {providerLabel}</div>
+      )}
 
       <div className="icons-body">
         {state.kind === 'idle' && (
           <div className="empty">
             <h2>Find an icon</h2>
-            <p>Search by description. AI picks 4 matches from 700+ Phosphor icons. Click to insert.</p>
+            <p>Describe what you need. Click a result to place it on the canvas.</p>
           </div>
         )}
 
@@ -127,35 +152,38 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
           </div>
         )}
 
-        {state.kind === 'results' && (
+        {currentResults && (
           <>
-            <div className="icons-grid">
-              {state.names.map((name) => (
+            <div className="icons-grid" aria-busy={isSearching}>
+              {currentResults.names.map((name) => (
                 <button
                   key={name}
                   type="button"
                   className="icon-card"
-                  onClick={() => insert(name, state.svgs[name])}
+                  onClick={() => insert(name, currentResults.svgs[name])}
+                  aria-label={`Insert ${name}`}
                   title={`Insert ${name}`}
                 >
-                  <span className="icon-preview" dangerouslySetInnerHTML={{ __html: state.svgs[name] }} />
+                  <span className="icon-preview" aria-hidden dangerouslySetInnerHTML={{ __html: currentResults.svgs[name] }} />
                   <span className="icon-name">{name}</span>
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              className="secondary icons-more"
-              onClick={() => search(false)}
-              disabled={state.kind !== 'results'}
-            >
-              Show 4 more
-            </button>
+            {state.kind === 'results' && (
+              <button
+                type="button"
+                className="secondary icons-more"
+                onClick={() => search(false)}
+                disabled={isSearching}
+              >
+                {isSearching ? 'Loading…' : 'Show 4 more'}
+              </button>
+            )}
           </>
         )}
 
         {state.kind === 'error' && (
-          <div className="error-box">
+          <div className="error-box" style={currentResults ? { marginTop: 12 } : undefined}>
             <strong>{state.message}</strong>
             <button className="secondary" style={{ marginTop: 8 }} onClick={() => search(true)}>
               Try again

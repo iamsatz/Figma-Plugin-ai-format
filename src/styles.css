@@ -185,6 +185,15 @@ button.link:focus-visible {
   padding: 6px 8px;
 }
 
+.field select {
+  appearance: none;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='currentColor' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+}
+
 .field input:focus-visible,
 .field textarea:focus-visible,
 .field select:focus-visible {
@@ -664,12 +673,17 @@ button.link:focus-visible {
   padding: 12px 8px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   font: inherit;
   color: var(--text);
   transition: background 0.1s, border-color 0.1s;
   min-height: 84px;
+}
+
+.icon-card.skeleton {
+  pointer-events: none;
+  transition: none;
 }
 
 .icon-card:hover {
@@ -710,16 +724,24 @@ button.link:focus-visible {
 }
 
 .icon-name {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-secondary);
   text-align: center;
   word-break: break-word;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .icons-more {
   display: block;
   margin: 12px auto 0;
+}
+
+.icons-provider-note {
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 /* ── Token usage bar ──────────────────────────── */
@@ -733,14 +755,6 @@ button.link:focus-visible {
   background: var(--bg-secondary);
   font-size: 11px;
   color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.token-bar-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
   flex-shrink: 0;
 }
 
