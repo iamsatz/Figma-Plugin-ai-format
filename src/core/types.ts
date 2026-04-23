@@ -61,13 +61,24 @@ export type Fix = RenameFix | AutoLayoutFix | SpacingFix | ReorderFix;
 
 export type Scope = 'selection' | 'page' | 'file';
 
+export type ScanStats = {
+  framesScanned: number;
+  nodesWalked: number;
+  durationMs: number;
+};
+
 export type UiToPluginMessage =
   | { type: 'ping' }
   | { type: 'get-settings' }
-  | { type: 'save-settings'; payload: Settings };
+  | { type: 'save-settings'; payload: Settings }
+  | { type: 'scan'; scope: Scope }
+  | { type: 'apply'; fixIds: string[] };
 
 export type PluginToUiMessage =
   | { type: 'pong' }
   | { type: 'settings'; payload: Settings }
   | { type: 'settings-saved' }
+  | { type: 'scan-progress'; phase: 'walking' | 'analyzing' | 'done'; message?: string }
+  | { type: 'scan-result'; fixes: Fix[]; stats: ScanStats }
+  | { type: 'apply-result'; applied: number; failed: number }
   | { type: 'error'; message: string };

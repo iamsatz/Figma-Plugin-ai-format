@@ -6,13 +6,15 @@
   "scripts": {
     "build": "node esbuild.config.mjs",
     "watch": "node esbuild.config.mjs --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.100.2",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "esbuild": "^0.23.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.5.4"
   },
   "dependencies": {

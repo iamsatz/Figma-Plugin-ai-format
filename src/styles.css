@@ -182,3 +182,85 @@ button.secondary {
   font-size: 11px;
   opacity: 0.9;
 }
+
+.banner {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+button.link {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.scope {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scope label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.actions-inline {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 16px;
+}
+
+.scan-summary {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.scan-summary h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.count-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.error-box {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.error-box p {
+  margin: 4px 0 0;
+  color: var(--text);
+}
