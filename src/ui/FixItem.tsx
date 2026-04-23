@@ -5,9 +5,12 @@ type Props = {
   fix: Fix;
   checked: boolean;
   onToggle: (id: string) => void;
+  status?: 'applied' | 'failed' | 'skipped';
 };
 
-export function FixItem({ fix, checked, onToggle }: Props) {
+export function FixItem({ fix, checked, onToggle, status }: Props) {
+  const auditMode = status !== undefined;
+
   function jumpToNode() {
     send({ type: 'jump-to-node', nodeId: fix.nodeId });
   }
@@ -24,19 +27,25 @@ export function FixItem({ fix, checked, onToggle }: Props) {
 
   return (
     <li
-      className="fix-item"
+      className={`fix-item${status ? ` fix-item--${status}` : ''}`}
       onClick={handleRowClick}
       onKeyDown={handleRowKey}
       title="Click to select and zoom to this layer in Figma"
     >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={() => onToggle(fix.id)}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-        aria-label={`Include fix: ${label(fix)}`}
-      />
+      {auditMode ? (
+        <span className={`fix-status-icon fix-status-icon--${status}`} aria-label={status}>
+          {status === 'applied' ? '✓' : status === 'failed' ? '✗' : '–'}
+        </span>
+      ) : (
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onToggle(fix.id)}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          aria-label={`Include fix: ${label(fix)}`}
+        />
+      )}
       <span className="fix-label">{label(fix)}</span>
       <span className={`badge badge-${fix.confidence}`}>{fix.confidence}</span>
     </li>

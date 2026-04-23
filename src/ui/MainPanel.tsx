@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { send, subscribe } from './bridge';
 import { FixList } from './FixList';
-import { renameWithGemini } from './api/gemini';
+import { renameWithGemini, friendlyGeminiError } from './api/gemini';
 import { fallbackNames } from './api/fallback-names';
 import type { Fix, RenameCandidate, ScanStats, Scope, Settings } from '../core/types';
 
@@ -14,7 +14,7 @@ type ScanState =
   | { kind: 'idle' }
   | { kind: 'running' }
   | { kind: 'done'; fixes: Fix[]; stats: ScanStats; candidatesSkipped: number }
-  | { kind: 'applied'; applied: number; failed: number; totalFixes: number }
+  | { kind: 'applied'; fixes: Fix[]; appliedIds: Set<string>; failedIds: Set<string> }
   | { kind: 'error'; message: string };
 
 type NamingState =
@@ -22,7 +22,7 @@ type NamingState =
   | { kind: 'running'; processed: number; total: number }
   | { kind: 'done'; added: number }
   | { kind: 'fallback-no-key'; added: number }
-  | { kind: 'fallback-api-error'; added: number };
+  | { kind: 'fallback-api-error'; added: number; errorMsg: string };
 
 // 'review' items are unchecked by default; all others are pre-checked.
 function defaultChecked(fixes: Fix[]): Set<string> {
@@ -65,9 +65,9 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
         setApplying(false);
         setState((prev) => ({
           kind: 'applied',
-          applied: msg.applied,
-          failed: msg.failed,
-          totalFixes: prev.kind === 'done' ? prev.fixes.length : 0,
+          fixes: prev.kind === 'done' ? prev.fixes : [],
+          appliedIds: new Set(msg.applied),
+          failedIds: new Set(msg.failed),
         }));
       } else if (msg.type === 'error') {
         setState({ kind: 'error', message: msg.message });
@@ -94,6 +94,7 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
     const combined: Record<string, string> = {};
     const fallbackIds = new Set<string>();
     let sawApiError = false;
+    let lastApiErrorMsg = 'Check your connection';
 
     for (let i = 0; i < candidates.length; i++) {
       if (controller.signal.aborted) return;
@@ -104,9 +105,10 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
           const names = await renameWithGemini(apiKey, candidate.pngBase64, candidate.tree, controller.signal);
           Object.assign(combined, names);
           aiOk = true;
-        } catch {
+        } catch (err) {
           if (controller.signal.aborted) return;
           sawApiError = true;
+          lastApiErrorMsg = friendlyGeminiError(err);
         }
       }
       if (!aiOk) {
@@ -136,7 +138,7 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
     if (!apiKey) {
       setNaming({ kind: 'fallback-no-key', added: count });
     } else if (sawApiError) {
-      setNaming({ kind: 'fallback-api-error', added: count });
+      setNaming({ kind: 'fallback-api-error', added: count, errorMsg: lastApiErrorMsg });
     } else {
       setNaming({ kind: 'done', added: count });
     }
@@ -192,7 +194,8 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
 
   const fixes = state.kind === 'done' ? state.fixes : [];
   const highCount = useMemo(() => fixes.filter((f) => f.confidence === 'high').length, [fixes]);
-  const scanned = state.kind === 'done';
+  const scanned = state.kind === 'done' || state.kind === 'applied';
+  const namingInProgress = naming.kind === 'running';
 
   return (
     <div className="main-panel">
@@ -223,11 +226,23 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
         <button
           className={scanned ? 'secondary' : 'primary'}
           onClick={runScan}
-          disabled={state.kind === 'running'}
+          disabled={state.kind === 'running' || applying}
         >
           {state.kind === 'running' ? 'Scanning…' : scanned ? 'Rescan' : 'Scan'}
         </button>
       </div>
+
+      {state.kind === 'running' && (
+        <div className="scan-skeleton" aria-label="Scanning…">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="skeleton-row">
+              <div className="skeleton-check" />
+              <div className="skeleton-label" style={{ width: `${55 + (i * 13) % 30}%` }} />
+              <div className="skeleton-badge" />
+            </div>
+          ))}
+        </div>
+      )}
 
       {state.kind === 'done' && (
         <>
@@ -251,7 +266,7 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
           )}
           {naming.kind === 'fallback-api-error' && (
             <div className="naming-bar warning" role="status">
-              AI naming unavailable — used content-based names instead ({naming.added} added).
+              {naming.errorMsg} — used content-based names instead ({naming.added} added).
             </div>
           )}
           {state.candidatesSkipped > 0 && (
@@ -261,7 +276,19 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
           )}
 
           <div className="fix-list-container">
-            <FixList fixes={fixes} checkedIds={checkedIds} onToggle={toggleFix} />
+            {fixes.length === 0 && !namingInProgress ? (
+              <div className="empty">
+                <h2>Looks clean!</h2>
+                <p>No cleanup needed — layer names, spacing, and order all look good.</p>
+              </div>
+            ) : (
+              <FixList
+                fixes={fixes}
+                checkedIds={checkedIds}
+                onToggle={toggleFix}
+                namingInProgress={namingInProgress}
+              />
+            )}
           </div>
 
           <footer className="action-footer">
@@ -289,17 +316,32 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
       )}
 
       {state.kind === 'applied' && (
-        <div className="scan-summary applied">
-          <h3>
-            {state.applied} applied
-            {state.failed > 0 ? ` · ${state.failed} failed` : ''}
-            {` of ${state.totalFixes} found`}
-          </h3>
-          <p className="hint">⌘Z reverts all changes in one step.</p>
-          <button className="secondary" style={{ marginTop: 8 }} onClick={runScan}>
-            Scan again
-          </button>
-        </div>
+        <>
+          <div className="scan-meta">
+            <span className="scan-meta-count applied-count">
+              {state.appliedIds.size} applied
+              {state.failedIds.size > 0 && (
+                <span className="failed-count"> · {state.failedIds.size} failed</span>
+              )}
+            </span>
+            <span className="hint">{state.fixes.length} total</span>
+          </div>
+
+          <div className="fix-list-container">
+            <FixList
+              fixes={state.fixes}
+              checkedIds={new Set()}
+              onToggle={() => {}}
+              appliedIds={state.appliedIds}
+              failedIds={state.failedIds}
+            />
+          </div>
+
+          <footer className="action-footer">
+            <button className="primary" onClick={runScan}>Scan again</button>
+            <p className="footer-hint" style={{ margin: 0, alignSelf: 'center' }}>⌘Z reverts all changes.</p>
+          </footer>
+        </>
       )}
 
       {state.kind === 'error' && (

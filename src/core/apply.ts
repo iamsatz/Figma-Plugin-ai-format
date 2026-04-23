@@ -1,10 +1,10 @@
 import type { AutoLayoutFix, Fix, ReorderFix, SpacingFix } from './types';
 
-export type ApplyResult = { applied: number; failed: number };
+export type ApplyResult = { applied: string[]; failed: string[] };
 
 export async function applyFixes(fixes: Fix[]): Promise<ApplyResult> {
-  let applied = 0;
-  let failed = 0;
+  const applied: string[] = [];
+  const failed: string[] = [];
 
   // Apply in a stable order so AL conversion happens before spacing/reorder
   // on the same node, and reorder happens after children have their final parent.
@@ -26,9 +26,9 @@ export async function applyFixes(fixes: Fix[]): Promise<ApplyResult> {
           await applyRename(fix.nodeId, fix.newName);
           break;
       }
-      applied++;
+      applied.push(fix.id);
     } catch (err) {
-      failed++;
+      failed.push(fix.id);
       console.warn('[layercraft] failed to apply fix', fix.id, err);
     }
   }

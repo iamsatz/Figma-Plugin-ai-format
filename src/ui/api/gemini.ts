@@ -35,6 +35,15 @@ export class GeminiError extends Error {
   }
 }
 
+export function friendlyGeminiError(err: unknown): string {
+  if (err instanceof GeminiError) {
+    if (err.status === 401 || err.status === 403) return 'Invalid API key';
+    if (err.status === 429) return 'Rate limit hit — try again later';
+    if (err.status >= 500) return 'Gemini service error';
+  }
+  return 'Check your connection';
+}
+
 type GeminiBody = {
   contents: Array<{
     role: 'user';

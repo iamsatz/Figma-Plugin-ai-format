@@ -113,5 +113,5 @@ export type PluginToUiMessage =
       candidatesSkipped: number;
     }
   | { type: 'rename-fixes'; fixes: RenameFix[] }
-  | { type: 'apply-result'; applied: number; failed: number }
+  | { type: 'apply-result'; applied: string[]; failed: string[] }
   | { type: 'error'; message: string };

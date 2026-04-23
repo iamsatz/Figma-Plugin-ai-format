@@ -47,7 +47,7 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
           if (f) toApply.push(f);
         }
         const result = await applyFixes(toApply);
-        figma.notify(`${result.applied} fixes applied. Cmd+Z to undo.`);
+        figma.notify(`${result.applied.length} fixes applied. Cmd+Z to undo.`);
         send({ type: 'apply-result', applied: result.applied, failed: result.failed });
         return;
       }

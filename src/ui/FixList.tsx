@@ -14,10 +14,14 @@ type Props = {
   fixes: Fix[];
   checkedIds: Set<string>;
   onToggle: (id: string) => void;
+  namingInProgress?: boolean;
+  appliedIds?: Set<string>;
+  failedIds?: Set<string>;
 };
 
-export function FixList({ fixes, checkedIds, onToggle }: Props) {
+export function FixList({ fixes, checkedIds, onToggle, namingInProgress, appliedIds, failedIds }: Props) {
   const [collapsed, setCollapsed] = useState<Set<Fix['type']>>(new Set());
+  const auditMode = appliedIds !== undefined;
 
   function toggleGroup(key: Fix['type']) {
     setCollapsed((prev) => {
@@ -28,18 +32,24 @@ export function FixList({ fixes, checkedIds, onToggle }: Props) {
     });
   }
 
-  const nonEmpty = GROUPS.filter((g) => fixes.some((f) => f.type === g.key));
+  // Reserve the Renames slot while naming is still in flight so the list
+  // doesn't shift when rename fixes arrive.
+  const visible = GROUPS.filter((g) =>
+    fixes.some((f) => f.type === g.key) || (g.key === 'rename' && namingInProgress),
+  );
 
-  if (nonEmpty.length === 0) {
-    return <p className="hint" style={{ padding: '16px 0' }}>No fixes found.</p>;
+  if (visible.length === 0) {
+    return null;
   }
 
   return (
     <div className="fix-list">
-      {nonEmpty.map(({ key, label }) => {
+      {visible.map(({ key, label }) => {
         const group = fixes.filter((f) => f.type === key);
         const isCollapsed = collapsed.has(key);
-        const checkedCount = group.filter((f) => checkedIds.has(f.id)).length;
+        const checkedCount = auditMode
+          ? (appliedIds ? group.filter((f) => appliedIds.has(f.id)).length : 0)
+          : group.filter((f) => checkedIds.has(f.id)).length;
 
         return (
           <section key={key} className="fix-group">
@@ -51,19 +61,32 @@ export function FixList({ fixes, checkedIds, onToggle }: Props) {
               <span className="chevron">{isCollapsed ? '▶' : '▾'}</span>
               <span className="group-label">{label}</span>
               <span className="group-count">
-                {checkedCount}/{group.length}
+                {auditMode ? `${checkedCount}/${group.length}` : `${checkedCount}/${group.length}`}
               </span>
             </button>
             {!isCollapsed && (
               <ul className="fix-group-items">
-                {group.map((fix) => (
-                  <FixItem
-                    key={fix.id}
-                    fix={fix}
-                    checked={checkedIds.has(fix.id)}
-                    onToggle={onToggle}
-                  />
-                ))}
+                {group.length === 0 && namingInProgress ? (
+                  <li className="fix-item-placeholder" aria-live="polite">Naming layers…</li>
+                ) : (
+                  group.map((fix) => (
+                    <FixItem
+                      key={fix.id}
+                      fix={fix}
+                      checked={checkedIds.has(fix.id)}
+                      onToggle={onToggle}
+                      status={
+                        appliedIds?.has(fix.id)
+                          ? 'applied'
+                          : failedIds?.has(fix.id)
+                          ? 'failed'
+                          : auditMode
+                          ? 'skipped'
+                          : undefined
+                      }
+                    />
+                  ))
+                )}
               </ul>
             )}
           </section>
