@@ -9,7 +9,16 @@
   --accent: var(--figma-color-bg-brand, #0d99ff);
   --accent-text: var(--figma-color-text-onbrand, #ffffff);
   --danger: var(--figma-color-text-danger, #e03e3e);
+  /* No Figma token for success; define light/dark explicitly. */
   --success: #1b8a4e;
+  --badge-amber: #b36b00;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --success: #34c77b;
+    --badge-amber: #e8920a;
+  }
 }
 
 * {
@@ -455,20 +464,21 @@ button.link:focus-visible {
   padding: 1px 5px;
   border-radius: 4px;
   text-transform: capitalize;
+  white-space: nowrap;
 }
 
 .badge-high {
-  background: color-mix(in srgb, var(--success) 12%, var(--bg));
+  background: color-mix(in srgb, var(--success) 18%, var(--bg));
   color: var(--success);
 }
 
 .badge-medium {
-  background: color-mix(in srgb, #b36b00 12%, var(--bg));
-  color: #b36b00;
+  background: color-mix(in srgb, var(--badge-amber) 18%, var(--bg));
+  color: var(--badge-amber);
 }
 
 .badge-review {
-  background: color-mix(in srgb, var(--danger) 10%, var(--bg));
+  background: color-mix(in srgb, var(--danger) 14%, var(--bg));
   color: var(--danger);
 }
 
@@ -481,6 +491,21 @@ button.link:focus-visible {
   border-top: 1px solid var(--border);
   background: var(--bg);
   flex-shrink: 0;
+}
+
+/* ── Footer hint + discard ────────────────────── */
+
+.footer-hint {
+  margin: 0;
+  padding: 4px 16px 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.discard-link {
+  margin-left: auto;
+  color: var(--text-secondary);
 }
 
 /* ── Applied / post-apply state ───────────────── */

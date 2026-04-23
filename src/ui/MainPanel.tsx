@@ -12,10 +12,10 @@ type ScanState =
   | { kind: 'idle' }
   | { kind: 'running' }
   | { kind: 'done'; fixes: Fix[]; stats: ScanStats }
-  | { kind: 'applied'; applied: number; failed: number }
+  | { kind: 'applied'; applied: number; failed: number; totalFixes: number }
   | { kind: 'error'; message: string };
 
-// 'review' confidence items are unchecked by default; everything else is checked.
+// 'review' items are unchecked by default; all others are pre-checked.
 function defaultChecked(fixes: Fix[]): Set<string> {
   return new Set(fixes.filter((f) => f.confidence !== 'review').map((f) => f.id));
 }
@@ -33,7 +33,12 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
         setCheckedIds(defaultChecked(msg.fixes));
       } else if (msg.type === 'apply-result') {
         setApplying(false);
-        setState({ kind: 'applied', applied: msg.applied, failed: msg.failed });
+        setState((prev) => ({
+          kind: 'applied',
+          applied: msg.applied,
+          failed: msg.failed,
+          totalFixes: prev.kind === 'done' ? prev.fixes.length : 0,
+        }));
       } else if (msg.type === 'error') {
         setState({ kind: 'error', message: msg.message });
         setApplying(false);
@@ -56,6 +61,11 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
     send({ type: 'scan', scope });
   }
 
+  function discard() {
+    setState({ kind: 'idle' });
+    setCheckedIds(new Set());
+  }
+
   function toggleFix(id: string) {
     setCheckedIds((prev) => {
       const next = new Set(prev);
@@ -71,7 +81,7 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
     send({ type: 'apply', fixIds: [...checkedIds] });
   }
 
-  function applyAllHigh() {
+  function applyAllHighConfidence() {
     if (state.kind !== 'done') return;
     const highIds = state.fixes.filter((f) => f.confidence === 'high').map((f) => f.id);
     if (highIds.length === 0) return;
@@ -142,12 +152,16 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
             <button
               className="secondary"
               disabled={applying || highCount === 0}
-              onClick={applyAllHigh}
-              title="Applies only High-confidence fixes, ignoring your current selection"
+              onClick={applyAllHighConfidence}
+              title="Applies all High-confidence fixes regardless of your checkbox selection"
             >
-              Apply All High ({highCount})
+              Apply High ({highCount})
+            </button>
+            <button className="link discard-link" onClick={discard} disabled={applying}>
+              Discard
             </button>
           </footer>
+          <p className="footer-hint">⌘Z reverts all changes in one step.</p>
         </>
       )}
 
@@ -156,8 +170,12 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
           <h3>
             {state.applied} applied
             {state.failed > 0 ? ` · ${state.failed} failed` : ''}
+            {` of ${state.totalFixes} found`}
           </h3>
-          <p className="hint">Press ⌘Z to revert all changes in one step.</p>
+          <p className="hint">⌘Z reverts all changes in one step.</p>
+          <button className="secondary" style={{ marginTop: 8 }} onClick={runScan}>
+            Scan again
+          </button>
         </div>
       )}
 
@@ -165,6 +183,9 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
         <div className="error-box">
           <strong>Scan failed.</strong>
           <p>{state.message}</p>
+          <button className="secondary" style={{ marginTop: 8 }} onClick={runScan}>
+            Try again
+          </button>
         </div>
       )}
     </div>

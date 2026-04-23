@@ -8,21 +8,33 @@ type Props = {
 };
 
 export function FixItem({ fix, checked, onToggle }: Props) {
-  function handleRowClick(e: React.MouseEvent) {
-    // Checkbox click is handled by its own onChange — don't double-toggle.
-    if ((e.target as HTMLElement).closest('input[type="checkbox"]')) return;
+  function jumpToNode() {
     send({ type: 'jump-to-node', nodeId: fix.nodeId });
   }
 
+  function handleRowClick(e: React.MouseEvent) {
+    if ((e.target as HTMLElement).closest('input[type="checkbox"]')) return;
+    jumpToNode();
+  }
+
+  function handleRowKey(e: React.KeyboardEvent) {
+    if ((e.target as HTMLElement).closest('input[type="checkbox"]')) return;
+    if (e.key === 'Enter') jumpToNode();
+  }
+
   return (
-    <li className="fix-item" onClick={handleRowClick} role="button" tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') send({ type: 'jump-to-node', nodeId: fix.nodeId }); }}
+    <li
+      className="fix-item"
+      onClick={handleRowClick}
+      onKeyDown={handleRowKey}
+      title="Click to select and zoom to this layer in Figma"
     >
       <input
         type="checkbox"
         checked={checked}
         onChange={() => onToggle(fix.id)}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
         aria-label={`Include fix: ${label(fix)}`}
       />
       <span className="fix-label">{label(fix)}</span>
@@ -48,6 +60,6 @@ function label(fix: Fix): string {
       return `${fix.nodeName} · ${fieldLabel[fix.field]}: ${Math.round(fix.oldValue)} → ${fix.newValue}`;
     }
     case 'reorder':
-      return `${fix.nodeName} — reorder children`;
+      return `${fix.nodeName} — reorder ${fix.newChildOrder.length} children`;
   }
 }

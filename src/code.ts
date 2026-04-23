@@ -48,7 +48,9 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
       case 'jump-to-node': {
         const node = await figma.getNodeByIdAsync(msg.nodeId);
         if (node && 'type' in node && node.type !== 'DOCUMENT' && node.type !== 'PAGE') {
-          figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
+          const scene = node as SceneNode;
+          figma.currentPage.selection = [scene];
+          figma.viewport.scrollAndZoomIntoView([scene]);
         }
         return;
       }
