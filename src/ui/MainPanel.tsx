@@ -11,10 +11,11 @@ type ScanState =
   | { kind: 'idle' }
   | { kind: 'running' }
   | { kind: 'done'; fixes: Fix[]; stats: ScanStats }
+  | { kind: 'applied'; applied: number; failed: number }
   | { kind: 'error'; message: string };
 
 export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
-  const [scope, setScope] = useState<Scope>('selection');
+  const [scope, setScopeInternal] = useState<Scope>('selection');
   const [state, setState] = useState<ScanState>({ kind: 'idle' });
   const [applying, setApplying] = useState(false);
 
@@ -25,13 +26,22 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
         console.log('[layercraft] scan result', msg.stats, msg.fixes);
       } else if (msg.type === 'apply-result') {
         setApplying(false);
-        console.log('[layercraft] applied', msg);
+        setState({ kind: 'applied', applied: msg.applied, failed: msg.failed });
       } else if (msg.type === 'error') {
         setState({ kind: 'error', message: msg.message });
         setApplying(false);
       }
     });
   }, []);
+
+  function setScope(next: Scope) {
+    if (next === scope) return;
+    setScopeInternal(next);
+    // Stale fix counts from a previous scope would mislead — drop back to idle.
+    if (state.kind === 'done' || state.kind === 'applied' || state.kind === 'error') {
+      setState({ kind: 'idle' });
+    }
+  }
 
   function runScan() {
     setState({ kind: 'running' });
@@ -45,6 +55,10 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
     setApplying(true);
     send({ type: 'apply', fixIds: high });
   }
+
+  const scanned = state.kind === 'done';
+  const scanLabel =
+    state.kind === 'running' ? 'Scanning...' : scanned ? 'Rescan' : 'Scan';
 
   return (
     <div>
@@ -65,7 +79,7 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
               checked={scope === 'selection'}
               onChange={() => setScope('selection')}
             />
-            Selected frames
+            Selection
           </label>
           <label>
             <input
@@ -90,11 +104,11 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
 
       <div className="actions-inline">
         <button
-          className="primary"
+          className={scanned ? 'secondary' : 'primary'}
           onClick={runScan}
           disabled={state.kind === 'running'}
         >
-          {state.kind === 'running' ? 'Scanning...' : 'Scan'}
+          {scanLabel}
         </button>
       </div>
 
@@ -110,9 +124,7 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
             <li>Spacing: {count(state.fixes, 'spacing')}</li>
             <li>Reorder: {count(state.fixes, 'reorder')}</li>
           </ul>
-          <p className="hint">
-            Open the UI devtools console to inspect the raw fix list. Full preview UI lands in Phase 3.
-          </p>
+          <p className="hint">Full preview UI with per-fix accept/reject lands in Phase 3.</p>
           <button
             className="primary"
             disabled={applying || countConfidence(state.fixes, 'high') === 0}
@@ -122,6 +134,15 @@ export function MainPanel({ hasApiKey, onGoToSettings }: Props) {
               ? 'Applying...'
               : `Apply ${countConfidence(state.fixes, 'high')} High-confidence fixes`}
           </button>
+        </div>
+      )}
+
+      {state.kind === 'applied' && (
+        <div className="scan-summary applied">
+          <h3>
+            {state.applied} applied{state.failed > 0 ? ` · ${state.failed} failed` : ''}
+          </h3>
+          <p className="hint">Press Ctrl+Z (⌘Z on macOS) to revert everything in one step.</p>
         </div>
       )}
 

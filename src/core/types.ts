@@ -54,7 +54,7 @@ export type ReorderFix = {
   nodeId: string;
   type: 'reorder';
   newChildOrder: string[];
-  confidence: 'high';
+  confidence: 'high' | 'medium';
 };
 
 export type Fix = RenameFix | AutoLayoutFix | SpacingFix | ReorderFix;

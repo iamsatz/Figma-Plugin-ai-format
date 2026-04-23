@@ -147,12 +147,16 @@ function collectFixesForContainer(
   if (snapshot.children.length >= 2) {
     const desired = desiredChildOrder(snapshot.children, mode);
     if (!isAlreadyOrdered(snapshot.children, desired)) {
+      // In AL frames, child order == layout order, so reorder is safe.
+      // In NONE-mode frames, child order == z-order; changing it could move
+      // overlapping elements forward/back. Demote to 'medium' so bulk Apply
+      // (High-only) doesn't silently restack a canvas.
       fixes.push({
         id: `order:${snapshot.id}`,
         nodeId: snapshot.id,
         type: 'reorder',
         newChildOrder: desired,
-        confidence: 'high',
+        confidence: mode === 'NONE' ? 'medium' : 'high',
       });
     }
   }
