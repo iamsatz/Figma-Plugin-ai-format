@@ -169,6 +169,14 @@ button.link:focus-visible {
   color: var(--text);
 }
 
+.field.inactive {
+  opacity: 0.55;
+}
+
+.field.inactive input {
+  background: var(--bg);
+}
+
 .hint {
   color: var(--text-secondary);
   font-size: 11px;
@@ -750,8 +758,7 @@ button.link:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
-  border-top: 1px solid var(--border);
+  padding: 5px 16px;
   background: var(--bg-secondary);
   font-size: 11px;
   color: var(--text-secondary);

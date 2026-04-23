@@ -60,7 +60,7 @@ export function SettingsPanel({ settings, onSave }: Props) {
         <span className="hint">Used for layer naming and icon suggestions.</span>
       </div>
 
-      <div className="field">
+      <div className={`field${aiProvider !== 'gemini' ? ' inactive' : ''}`}>
         <label htmlFor="gemini-key">Gemini API key</label>
         <input
           id="gemini-key"
@@ -75,7 +75,7 @@ export function SettingsPanel({ settings, onSave }: Props) {
         </span>
       </div>
 
-      <div className="field">
+      <div className={`field${aiProvider !== 'claude' ? ' inactive' : ''}`}>
         <label htmlFor="claude-key">Claude API key</label>
         <input
           id="claude-key"
@@ -86,7 +86,7 @@ export function SettingsPanel({ settings, onSave }: Props) {
           autoComplete="off"
         />
         <span className="hint">
-          Get one at <em>console.anthropic.com</em>. Only needed if the provider above is set to Claude.
+          Get one at <em>console.anthropic.com</em>.
         </span>
       </div>
 

@@ -4,6 +4,14 @@ import { suggestIconsWithGemini, friendlyGeminiError } from './api/gemini';
 import { suggestIconsWithClaude, friendlyClaudeError } from './api/claude';
 import { PHOSPHOR_ICONS } from './icons/catalog';
 import { fetchPhosphorSvg } from './icons/phosphor';
+import {
+  getIconsStore,
+  setQuery as storeSetQuery,
+  setPanelState,
+  addSeen,
+  resetSeen,
+  subscribeIconsStore,
+} from './icons/state';
 import { recordTokens } from './token-usage';
 import type { Settings } from '../core/types';
 
@@ -12,24 +20,21 @@ type Props = {
   onGoToSettings: () => void;
 };
 
-type ResultsData = { names: string[]; svgs: Record<string, string> };
-
-type IconState =
-  | { kind: 'idle' }
-  | { kind: 'loading' }
-  | { kind: 'results'; data: ResultsData; loadingMore: boolean }
-  | { kind: 'error'; message: string; previous?: ResultsData };
-
 export function IconsPanel({ settings, onGoToSettings }: Props) {
-  const [query, setQuery] = useState('');
-  const [state, setState] = useState<IconState>({ kind: 'idle' });
-  const seenRef = useRef<Set<string>>(new Set());
+  const [, forceRender] = useState({});
+  const store = getIconsStore();
+  const { query, panelState: state, seen } = store;
   const abortRef = useRef<AbortController | null>(null);
 
   const provider = settings?.aiProvider ?? 'gemini';
   const providerLabel = provider === 'claude' ? 'Claude Haiku 4.5' : 'Gemini 2.5 Flash';
   const apiKey = provider === 'claude' ? settings?.claudeApiKey?.trim() : settings?.geminiApiKey?.trim();
   const hasApiKey = Boolean(apiKey);
+
+  useEffect(() => {
+    // subscribeIconsStore calls notify on store changes; force-render on each.
+    return subscribeIconsStore(() => forceRender({}));
+  }, []);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -42,27 +47,28 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    if (reset) seenRef.current.clear();
+    if (reset) resetSeen();
 
     if (reset || state.kind !== 'results') {
-      setState({ kind: 'loading' });
+      setPanelState({ kind: 'loading' });
     } else {
-      setState({ ...state, loadingMore: true });
+      setPanelState({ ...state, loadingMore: true });
     }
 
     try {
-      const exclude = [...seenRef.current];
+      const exclude = [...seen];
       const result = provider === 'claude'
         ? await suggestIconsWithClaude(apiKey, query.trim(), PHOSPHOR_ICONS, exclude, controller.signal)
         : await suggestIconsWithGemini(apiKey, query.trim(), PHOSPHOR_ICONS, exclude, controller.signal);
       if (controller.signal.aborted) return;
       recordTokens('icons', result.usage.inputTokens, result.usage.outputTokens);
 
-      for (const n of result.names) seenRef.current.add(n);
+      addSeen(result.names);
 
       if (result.names.length === 0) {
-        const previous = state.kind === 'results' ? state.data : undefined;
-        setState({ kind: 'error', message: 'No more matches — try a different search.', previous });
+        const current = getIconsStore().panelState;
+        const previous = current.kind === 'results' ? current.data : undefined;
+        setPanelState({ kind: 'error', message: 'No more matches — try a different search.', previous });
         return;
       }
 
@@ -79,12 +85,13 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
       if (controller.signal.aborted) return;
 
       const fetched = result.names.filter((n) => svgs[n]);
-      setState({ kind: 'results', data: { names: fetched, svgs }, loadingMore: false });
+      setPanelState({ kind: 'results', data: { names: fetched, svgs }, loadingMore: false });
     } catch (err) {
       if (controller.signal.aborted) return;
       const msg = provider === 'claude' ? friendlyClaudeError(err) : friendlyGeminiError(err);
-      const previous = state.kind === 'results' ? state.data : undefined;
-      setState({ kind: 'error', message: msg, previous });
+      const current = getIconsStore().panelState;
+      const previous = current.kind === 'results' ? current.data : undefined;
+      setPanelState({ kind: 'error', message: msg, previous });
     }
   }
 
@@ -118,7 +125,7 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
         <input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => storeSetQuery(e.target.value)}
           placeholder="Describe an icon — e.g. 'user profile', 'cart', 'settings'"
           disabled={!hasApiKey || isSearching}
           aria-label="Icon search"
