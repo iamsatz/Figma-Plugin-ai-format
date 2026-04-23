@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { send, subscribe } from './bridge';
 import { SettingsPanel } from './SettingsPanel';
 import { MainPanel } from './MainPanel';
+import { IconsPanel } from './IconsPanel';
+import { TokenBar } from './TokenBar';
 import iconSvg from '../../assets/icon.svg';
 import type { Settings } from '../core/types';
 
-type Tab = 'main' | 'settings';
+type Tab = 'main' | 'icons' | 'settings';
 
 export function App() {
   const [tab, setTab] = useState<Tab>('main');
@@ -18,6 +20,9 @@ export function App() {
       else if (msg.type === 'settings-saved') flashToast('Settings saved');
       else if (msg.type === 'pong') console.log('[layercraft] pong from sandbox');
       else if (msg.type === 'error') flashToast(msg.message);
+      else if (msg.type === 'insert-svg-result') {
+        if (msg.error) flashToast(`Insert failed: ${msg.error}`);
+      }
     });
     send({ type: 'get-settings' });
     return unsub;
@@ -42,7 +47,10 @@ export function App() {
 
       <nav className="tabs">
         <button className={tab === 'main' ? 'active' : ''} onClick={() => setTab('main')}>
-          Main
+          Clean up
+        </button>
+        <button className={tab === 'icons' ? 'active' : ''} onClick={() => setTab('icons')}>
+          Icons
         </button>
         <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>
           Settings
@@ -52,6 +60,8 @@ export function App() {
       <main className="panel">
         {tab === 'main' ? (
           <MainPanel settings={settings} onGoToSettings={() => setTab('settings')} />
+        ) : tab === 'icons' ? (
+          <IconsPanel settings={settings} onGoToSettings={() => setTab('settings')} />
         ) : settings ? (
           <div className="settings-scroll">
             <SettingsPanel settings={settings} onSave={handleSave} />
@@ -61,6 +71,7 @@ export function App() {
         )}
       </main>
 
+      <TokenBar />
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

@@ -66,6 +66,24 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
         send({ type: 'rename-fixes', fixes });
         return;
       }
+      case 'insert-svg': {
+        try {
+          const node = figma.createNodeFromSvg(msg.svg);
+          node.name = msg.name;
+          const center = figma.viewport.center;
+          node.x = Math.round(center.x - node.width / 2);
+          node.y = Math.round(center.y - node.height / 2);
+          figma.currentPage.appendChild(node);
+          figma.currentPage.selection = [node];
+          figma.viewport.scrollAndZoomIntoView([node]);
+          figma.notify(`Inserted ${msg.name}`);
+          send({ type: 'insert-svg-result', nodeId: node.id });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          send({ type: 'insert-svg-result', nodeId: null, error: message });
+        }
+        return;
+      }
     }
   } catch (err) {
     send({ type: 'error', message: err instanceof Error ? err.message : String(err) });

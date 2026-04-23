@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { send, subscribe } from './bridge';
 import { FixList } from './FixList';
 import { renameWithGemini, friendlyGeminiError } from './api/gemini';
+import { renameWithClaude, friendlyClaudeError } from './api/claude';
 import { fallbackNames } from './api/fallback-names';
+import { recordTokens } from './token-usage';
 import type { Fix, RenameCandidate, ScanStats, Scope, Settings } from '../core/types';
 
 type Props = {
@@ -37,7 +39,9 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
   const [applying, setApplying] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const hasApiKey = Boolean(settings?.aiApiKey);
+  const provider = settings?.aiProvider ?? 'gemini';
+  const activeKey = provider === 'claude' ? settings?.claudeApiKey : settings?.geminiApiKey;
+  const hasApiKey = Boolean(activeKey);
 
   useEffect(() => {
     return subscribe((msg) => {
@@ -79,7 +83,7 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
     });
     // settings change is captured via closure below; subscribe stays stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings?.aiApiKey]);
+  }, [activeKey, provider]);
 
   async function kickOffNaming(candidates: RenameCandidate[]) {
     if (candidates.length === 0) {
@@ -87,7 +91,7 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
       return;
     }
 
-    const apiKey = settings?.aiApiKey?.trim();
+    const apiKey = activeKey?.trim();
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -105,13 +109,16 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
       let aiOk = false;
       if (apiKey) {
         try {
-          const names = await renameWithGemini(apiKey, candidate.pngBase64, candidate.tree, controller.signal);
-          Object.assign(combined, names);
+          const result = provider === 'claude'
+            ? await renameWithClaude(apiKey, candidate.pngBase64, candidate.tree, controller.signal)
+            : await renameWithGemini(apiKey, candidate.pngBase64, candidate.tree, controller.signal);
+          Object.assign(combined, result.names);
+          recordTokens('naming', result.usage.inputTokens, result.usage.outputTokens);
           aiOk = true;
         } catch (err) {
           if (controller.signal.aborted) return;
           sawApiError = true;
-          lastApiErrorMsg = friendlyGeminiError(err);
+          lastApiErrorMsg = provider === 'claude' ? friendlyClaudeError(err) : friendlyGeminiError(err);
         }
       }
       if (!aiOk) {

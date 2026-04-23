@@ -6,7 +6,11 @@
   "ui": "dist/ui.html",
   "editorType": ["figma"],
   "networkAccess": {
-    "allowedDomains": ["https://generativelanguage.googleapis.com"],
-    "reasoning": "Calls Gemini 2.5 Flash for AI-powered layer naming."
+    "allowedDomains": [
+      "https://generativelanguage.googleapis.com",
+      "https://api.anthropic.com",
+      "https://unpkg.com"
+    ],
+    "reasoning": "Gemini + Claude for AI naming / icon suggestion; unpkg for Phosphor icon SVGs."
   }
 }

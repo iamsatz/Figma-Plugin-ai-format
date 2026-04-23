@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Settings } from '../core/types';
+import type { AiProvider, Settings } from '../core/types';
 
 type Props = {
   settings: Settings;
@@ -11,7 +11,9 @@ export function SettingsPanel({ settings, onSave }: Props) {
   const [tokensText, setTokensText] = useState(
     settings.tokens ? JSON.stringify(settings.tokens, null, 2) : '',
   );
-  const [aiApiKey, setAiApiKey] = useState(settings.aiApiKey);
+  const [aiProvider, setAiProvider] = useState<AiProvider>(settings.aiProvider);
+  const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey);
+  const [claudeApiKey, setClaudeApiKey] = useState(settings.claudeApiKey);
   const [ignoreText, setIgnoreText] = useState(settings.ignorePatterns.join('\n'));
   const [thresholdText, setThresholdText] = useState(String(settings.confidenceThreshold));
 
@@ -35,7 +37,9 @@ export function SettingsPanel({ settings, onSave }: Props) {
       ...settings,
       gridPx: grid,
       tokens,
-      aiApiKey: aiApiKey.trim(),
+      aiProvider,
+      geminiApiKey: geminiApiKey.trim(),
+      claudeApiKey: claudeApiKey.trim(),
       ignorePatterns,
       confidenceThreshold: threshold,
     });
@@ -43,6 +47,49 @@ export function SettingsPanel({ settings, onSave }: Props) {
 
   return (
     <div>
+      <div className="field">
+        <label htmlFor="provider">AI provider</label>
+        <select
+          id="provider"
+          value={aiProvider}
+          onChange={(e) => setAiProvider(e.target.value as AiProvider)}
+        >
+          <option value="gemini">Gemini 2.5 Flash</option>
+          <option value="claude">Claude Haiku 4.5</option>
+        </select>
+        <span className="hint">Used for layer naming and icon suggestions.</span>
+      </div>
+
+      <div className="field">
+        <label htmlFor="gemini-key">Gemini API key</label>
+        <input
+          id="gemini-key"
+          type="password"
+          placeholder="AIza..."
+          value={geminiApiKey}
+          onChange={(e) => setGeminiApiKey(e.target.value)}
+          autoComplete="off"
+        />
+        <span className="hint">
+          Get one at <em>aistudio.google.com/app/apikey</em>. Stored locally in figma.clientStorage.
+        </span>
+      </div>
+
+      <div className="field">
+        <label htmlFor="claude-key">Claude API key</label>
+        <input
+          id="claude-key"
+          type="password"
+          placeholder="sk-ant-..."
+          value={claudeApiKey}
+          onChange={(e) => setClaudeApiKey(e.target.value)}
+          autoComplete="off"
+        />
+        <span className="hint">
+          Get one at <em>console.anthropic.com</em>. Only needed if the provider above is set to Claude.
+        </span>
+      </div>
+
       <div className="field">
         <label htmlFor="grid">Grid (px)</label>
         <input
@@ -66,19 +113,6 @@ export function SettingsPanel({ settings, onSave }: Props) {
         />
         <span className="hint">If set, spacing snaps to the nearest token value instead of grid multiples.</span>
         {tokensError && <span className="error">{tokensError}</span>}
-      </div>
-
-      <div className="field">
-        <label htmlFor="api-key">Gemini API key</label>
-        <input
-          id="api-key"
-          type="password"
-          placeholder="AIza..."
-          value={aiApiKey}
-          onChange={(e) => setAiApiKey(e.target.value)}
-          autoComplete="off"
-        />
-        <span className="hint">Stored locally via figma.clientStorage. Required before scanning.</span>
       </div>
 
       <div className="field">

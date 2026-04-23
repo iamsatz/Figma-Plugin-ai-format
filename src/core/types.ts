@@ -1,10 +1,11 @@
-export type AiProvider = 'gemini-2.5-flash';
+export type AiProvider = 'gemini' | 'claude';
 
 export type Settings = {
   gridPx: number;
   tokens?: Record<string, number>;
   aiProvider: AiProvider;
-  aiApiKey: string;
+  geminiApiKey: string;
+  claudeApiKey: string;
   ignorePatterns: string[];
   confidenceThreshold: number;
 };
@@ -12,8 +13,9 @@ export type Settings = {
 export const DEFAULT_SETTINGS: Settings = {
   gridPx: 8,
   tokens: undefined,
-  aiProvider: 'gemini-2.5-flash',
-  aiApiKey: '',
+  aiProvider: 'gemini',
+  geminiApiKey: '',
+  claudeApiKey: '',
   ignorePatterns: ['^_'],
   confidenceThreshold: 0.7,
 };
@@ -98,7 +100,8 @@ export type UiToPluginMessage =
       type: 'rename-results';
       names: Record<string, string>;
       fallbackIds: string[];
-    };
+    }
+  | { type: 'insert-svg'; svg: string; name: string };
 
 export type PluginToUiMessage =
   | { type: 'pong' }
@@ -114,4 +117,5 @@ export type PluginToUiMessage =
     }
   | { type: 'rename-fixes'; fixes: RenameFix[] }
   | { type: 'apply-result'; applied: string[]; failed: string[] }
+  | { type: 'insert-svg-result'; nodeId: string | null; error?: string }
   | { type: 'error'; message: string };
