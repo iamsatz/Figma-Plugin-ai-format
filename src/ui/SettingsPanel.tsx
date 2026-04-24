@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { isClaude } from '../core/types';
 import type { AiProvider, Settings } from '../core/types';
 
 type Props = {
@@ -28,7 +29,7 @@ export function SettingsPanel({ settings, onSave }: Props) {
   // currently contains characters.
   const hasSavedKey =
     (settings.aiProvider === 'gemini' && settings.geminiApiKey.trim().length > 0) ||
-    (settings.aiProvider === 'claude' && settings.claudeApiKey.trim().length > 0);
+    (isClaude(settings.aiProvider) && settings.claudeApiKey.trim().length > 0);
 
   const [apiOpen, setApiOpen] = useState(!hasSavedKey);
   const [cleanupOpen, setCleanupOpen] = useState(false);
@@ -75,7 +76,8 @@ export function SettingsPanel({ settings, onSave }: Props) {
             onChange={(e) => setAiProvider(e.target.value as AiProvider)}
           >
             <option value="gemini">Gemini 2.5 Flash (Google)</option>
-            <option value="claude">Claude Haiku 4.5 (Anthropic)</option>
+            <option value="claude-haiku">Claude Haiku 4.5 (Anthropic — fast, cheap)</option>
+            <option value="claude-sonnet">Claude Sonnet 4.6 (Anthropic — smarter, slower)</option>
           </select>
           <span className="hint">Used for layer naming and icon search.</span>
         </div>
@@ -95,7 +97,7 @@ export function SettingsPanel({ settings, onSave }: Props) {
           </span>
         </div>
 
-        <div className={`field${aiProvider !== 'claude' ? ' inactive' : ''}`}>
+        <div className={`field${!isClaude(aiProvider) ? ' inactive' : ''}`}>
           <label htmlFor="claude-key">Claude API key</label>
           <input
             id="claude-key"

@@ -21,6 +21,11 @@ export async function getSettings(): Promise<Settings> {
   if (stored?.aiApiKey && !migrated.geminiApiKey) {
     migrated.geminiApiKey = stored.aiApiKey;
   }
+  // v2 → v3: the 'claude' provider was split into 'claude-haiku' and
+  // 'claude-sonnet'. Map the old value to the cheaper default.
+  if ((migrated.aiProvider as string) === 'claude') {
+    migrated.aiProvider = 'claude-haiku';
+  }
   return { ...DEFAULT_SETTINGS, ...migrated };
 }
 

@@ -1,4 +1,12 @@
-export type AiProvider = 'gemini' | 'claude';
+export type AiProvider = 'gemini' | 'claude-haiku' | 'claude-sonnet';
+
+export function isClaude(provider: AiProvider): boolean {
+  return provider === 'claude-haiku' || provider === 'claude-sonnet';
+}
+
+export function claudeModelId(provider: AiProvider): string {
+  return provider === 'claude-sonnet' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5';
+}
 
 export type Settings = {
   gridPx: number;

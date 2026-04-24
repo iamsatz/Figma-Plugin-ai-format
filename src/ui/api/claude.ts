@@ -2,7 +2,6 @@ import type { TreeNode } from '../../core/types';
 import type { IconLibrary, IconSuggestion } from '../icons/types';
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-haiku-4-5';
 
 const SYSTEM_PROMPT = `You are a senior product designer naming Figma layers for developer handoff.
 
@@ -189,9 +188,9 @@ function toSuggestion(
   return null;
 }
 
-function buildRenameBody(pngBase64: string, tree: TreeNode) {
+function buildRenameBody(model: string, pngBase64: string, tree: TreeNode) {
   return {
-    model: MODEL,
+    model,
     max_tokens: 4096,
     system: SYSTEM_PROMPT,
     messages: [
@@ -210,6 +209,7 @@ function buildRenameBody(pngBase64: string, tree: TreeNode) {
 }
 
 function buildIconBody(
+  model: string,
   query: string,
   catalogs: Record<IconLibrary, readonly string[]>,
   exclude: readonly string[],
@@ -223,7 +223,7 @@ function buildIconBody(
     `Exclude (already shown): ${exclude.join(', ') || '(none)'}\n\n` +
     `Return a JSON array of EXACTLY 4 items, each either a catalog match or a custom SVG.`;
   return {
-    model: MODEL,
+    model,
     max_tokens: 2000,
     system: ICON_SYSTEM_PROMPT,
     messages: [
@@ -258,11 +258,12 @@ async function postClaude(
 
 async function renameOnce(
   apiKey: string,
+  model: string,
   pngBase64: string,
   tree: TreeNode,
   signal?: AbortSignal,
 ): Promise<{ names: Record<string, string>; usage: ClaudeUsage }> {
-  const json = await postClaude(apiKey, buildRenameBody(pngBase64, tree), signal);
+  const json = await postClaude(apiKey, buildRenameBody(model, pngBase64, tree), signal);
   const names = parseRenameResponse(json);
   const usage = extractUsage(json);
   return { names, usage };
@@ -270,12 +271,13 @@ async function renameOnce(
 
 async function iconsOnce(
   apiKey: string,
+  model: string,
   query: string,
   catalogs: Record<IconLibrary, readonly string[]>,
   exclude: readonly string[],
   signal?: AbortSignal,
 ): Promise<{ suggestions: IconSuggestion[]; usage: ClaudeUsage }> {
-  const json = await postClaude(apiKey, buildIconBody(query, catalogs, exclude), signal);
+  const json = await postClaude(apiKey, buildIconBody(model, query, catalogs, exclude), signal);
   const sets: Record<IconLibrary, ReadonlySet<string>> = {
     phosphor: new Set(catalogs.phosphor),
     lucide: new Set(catalogs.lucide),
@@ -300,30 +302,32 @@ function isNonRetryable(err: unknown): boolean {
 
 export async function renameWithClaude(
   apiKey: string,
+  model: string,
   pngBase64: string,
   tree: TreeNode,
   signal?: AbortSignal,
 ): Promise<{ names: Record<string, string>; usage: ClaudeUsage }> {
   try {
-    return await renameOnce(apiKey, pngBase64, tree, signal);
+    return await renameOnce(apiKey, model, pngBase64, tree, signal);
   } catch (err) {
     if (isNonRetryable(err)) throw err;
     // One retry for transient errors (5xx, 529, 429, network, invalid JSON).
-    return await renameOnce(apiKey, pngBase64, tree, signal);
+    return await renameOnce(apiKey, model, pngBase64, tree, signal);
   }
 }
 
 export async function suggestIconsWithClaude(
   apiKey: string,
+  model: string,
   query: string,
   catalogs: Record<IconLibrary, readonly string[]>,
   exclude: readonly string[],
   signal?: AbortSignal,
 ): Promise<{ suggestions: IconSuggestion[]; usage: ClaudeUsage }> {
   try {
-    return await iconsOnce(apiKey, query, catalogs, exclude, signal);
+    return await iconsOnce(apiKey, model, query, catalogs, exclude, signal);
   } catch (err) {
     if (isNonRetryable(err)) throw err;
-    return await iconsOnce(apiKey, query, catalogs, exclude, signal);
+    return await iconsOnce(apiKey, model, query, catalogs, exclude, signal);
   }
 }

@@ -15,6 +15,7 @@ import {
   subscribeIconsStore,
 } from './icons/state';
 import { recordTokens } from './token-usage';
+import { isClaude, claudeModelId } from '../core/types';
 import type { Settings } from '../core/types';
 
 type Props = {
@@ -35,7 +36,8 @@ export function IconsPanel({ settings }: Props) {
   const abortRef = useRef<AbortController | null>(null);
 
   const provider = settings?.aiProvider ?? 'gemini';
-  const apiKey = provider === 'claude' ? settings?.claudeApiKey?.trim() : settings?.geminiApiKey?.trim();
+  const providerIsClaude = isClaude(provider);
+  const apiKey = providerIsClaude ? settings?.claudeApiKey?.trim() : settings?.geminiApiKey?.trim();
   const hasApiKey = Boolean(apiKey);
 
   useEffect(() => {
@@ -63,8 +65,8 @@ export function IconsPanel({ settings }: Props) {
 
     try {
       const exclude = [...seen];
-      const result = provider === 'claude'
-        ? await suggestIconsWithClaude(apiKey, query.trim(), CATALOGS, exclude, controller.signal)
+      const result = providerIsClaude
+        ? await suggestIconsWithClaude(apiKey, claudeModelId(provider), query.trim(), CATALOGS, exclude, controller.signal)
         : await suggestIconsWithGemini(apiKey, query.trim(), CATALOGS, exclude, controller.signal);
       if (controller.signal.aborted) return;
       recordTokens('icons', result.usage.inputTokens, result.usage.outputTokens);
@@ -99,7 +101,7 @@ export function IconsPanel({ settings }: Props) {
       setPanelState({ kind: 'results', data: { suggestions: fetched, svgs }, loadingMore: false });
     } catch (err) {
       if (controller.signal.aborted) return;
-      const msg = provider === 'claude' ? friendlyClaudeError(err) : friendlyGeminiError(err);
+      const msg = providerIsClaude ? friendlyClaudeError(err) : friendlyGeminiError(err);
       const current = getIconsStore().panelState;
       const previous = current.kind === 'results' ? current.data : undefined;
       setPanelState({ kind: 'error', message: msg, previous });

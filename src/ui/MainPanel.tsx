@@ -5,6 +5,7 @@ import { renameWithGemini, friendlyGeminiError } from './api/gemini';
 import { renameWithClaude, friendlyClaudeError } from './api/claude';
 import { fallbackNames } from './api/fallback-names';
 import { recordTokens } from './token-usage';
+import { isClaude, claudeModelId } from '../core/types';
 import type { Fix, LayoutHint, RenameCandidate, ScanStats, Scope, Settings } from '../core/types';
 
 type Props = {
@@ -41,7 +42,8 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
   const abortRef = useRef<AbortController | null>(null);
 
   const provider = settings?.aiProvider ?? 'gemini';
-  const activeKey = provider === 'claude' ? settings?.claudeApiKey : settings?.geminiApiKey;
+  const providerIsClaude = isClaude(provider);
+  const activeKey = providerIsClaude ? settings?.claudeApiKey : settings?.geminiApiKey;
   const hasApiKey = Boolean(activeKey);
 
   useEffect(() => {
@@ -110,8 +112,8 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
       let aiOk = false;
       if (apiKey) {
         try {
-          const result = provider === 'claude'
-            ? await renameWithClaude(apiKey, candidate.pngBase64, candidate.tree, controller.signal)
+          const result = providerIsClaude
+            ? await renameWithClaude(apiKey, claudeModelId(provider), candidate.pngBase64, candidate.tree, controller.signal)
             : await renameWithGemini(apiKey, candidate.pngBase64, candidate.tree, controller.signal);
           Object.assign(combined, result.names);
           recordTokens('naming', result.usage.inputTokens, result.usage.outputTokens);
@@ -119,7 +121,7 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
         } catch (err) {
           if (controller.signal.aborted) return;
           sawApiError = true;
-          lastApiErrorMsg = provider === 'claude' ? friendlyClaudeError(err) : friendlyGeminiError(err);
+          lastApiErrorMsg = providerIsClaude ? friendlyClaudeError(err) : friendlyGeminiError(err);
         }
       }
       if (!aiOk) {
@@ -298,7 +300,7 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
           )}
           {naming.kind === 'fallback-no-key' && (
             <div className="naming-bar warning" role="status">
-              No {provider === 'claude' ? 'Claude' : 'Gemini'} key — used content-based names ({naming.added} added).{' '}
+              No {providerIsClaude ? 'Claude' : 'Gemini'} key — used content-based names ({naming.added} added).{' '}
               <button className="link" onClick={onGoToSettings}>Add key</button>
             </div>
           )}
