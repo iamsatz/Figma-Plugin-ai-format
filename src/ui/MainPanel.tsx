@@ -270,7 +270,7 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
           )}
           {naming.kind === 'fallback-no-key' && (
             <div className="naming-bar warning" role="status">
-              No Gemini key — used content-based names ({naming.added} added).{' '}
+              No {provider === 'claude' ? 'Claude' : 'Gemini'} key — used content-based names ({naming.added} added).{' '}
               <button className="link" onClick={onGoToSettings}>Add key</button>
             </div>
           )}

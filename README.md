@@ -66,9 +66,9 @@ Without a key, structural fixes (AL inference, spacing snap, reorder) still work
 
 ## Limits
 
-- **Max 20 frames** exported to Gemini per scan (larger scans skip extras with a warning).
+- **Max 20 frames** exported to the AI provider per scan (larger scans skip extras with a warning).
 - Frames larger than **4096 × 4096 px** are skipped for AI naming (still get structural fixes).
-- Network calls go only to `generativelanguage.googleapis.com` — no other endpoints.
+- Network calls go only to `generativelanguage.googleapis.com` (Gemini), `api.anthropic.com` (Claude, if selected as the provider), and `unpkg.com` (Phosphor icon SVGs for the Icons tab) — no other endpoints.
 - Only layer **structure** is modified. Colors, fills, text content, effects, typography — never touched.
 
 ## Project layout
