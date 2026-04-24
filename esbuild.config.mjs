@@ -41,9 +41,11 @@ async function buildHtml() {
   const shell = await readFile('src/ui.html', 'utf8');
   const css = await readFile('src/styles.css', 'utf8');
   const js = await readFile(`${outdir}/ui.js`, 'utf8');
+  // Use the callback form of replace() so `$` sequences in the minified JS
+  // (e.g. `$&`, `$1`) aren't interpreted as backreferences by the replacer.
   const inlined = shell
-    .replace('/* __STYLES__ */', css)
-    .replace('/* __SCRIPT__ */', js);
+    .replace('/* __STYLES__ */', () => css)
+    .replace('/* __SCRIPT__ */', () => js);
   await writeFile(`${outdir}/ui.html`, inlined);
 }
 
