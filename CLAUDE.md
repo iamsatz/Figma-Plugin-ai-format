@@ -14,6 +14,12 @@ See `README.md` for install/build and the PRD (in session history) for the full 
 
 Always run `npm run typecheck` and `npm run build` before declaring a feature done.
 
+## DO NOT raise the esbuild target above es2017
+
+`esbuild.config.mjs` pins `target: 'es2017'` for both bundles. Figma's plugin sandbox (QuickJS) chokes on `?.` and `??` with `Syntax error on line 1: Unexpected token ?`, which Figma then surfaces as the generic *"An error occurred while running this plugin"* banner with no further hint. Targeting es2017 forces esbuild to transpile optional chaining and nullish coalescing down to equivalent ternary checks.
+
+If you need a newer runtime feature, add a shim — do not bump the target.
+
 ## Hard scope rule
 
 The plugin **must never** modify any visual attribute: colours, fills, strokes, effects, opacity, text content, typography, corner radii, or visual-only node props. Only these properties are in scope:
