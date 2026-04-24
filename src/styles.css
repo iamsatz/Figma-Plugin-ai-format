@@ -776,6 +776,15 @@ button.link:focus-visible {
   line-height: 1.25;
 }
 
+.icon-source {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  opacity: 0.65;
+  margin-top: 1px;
+}
+
 
 /* ── Token usage bar ──────────────────────────── */
 

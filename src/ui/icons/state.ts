@@ -1,4 +1,6 @@
-export type ResultsData = { names: string[]; svgs: Record<string, string> };
+import type { IconSuggestion } from './types';
+
+export type ResultsData = { suggestions: IconSuggestion[]; svgs: Record<string, string> };
 
 export type IconsPanelState =
   | { kind: 'idle' }
@@ -45,8 +47,8 @@ export function setPanelState(next: IconsPanelState): void {
   notify();
 }
 
-export function addSeen(names: readonly string[]): void {
-  for (const n of names) store.seen.add(n);
+export function addSeen(ids: readonly string[]): void {
+  for (const id of ids) store.seen.add(id);
 }
 
 export function resetSeen(): void {

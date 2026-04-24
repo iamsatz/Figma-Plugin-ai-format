@@ -1,4 +1,5 @@
 import type { TreeNode } from '../../core/types';
+import type { IconLibrary, IconSuggestion } from '../icons/types';
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-haiku-4-5';
@@ -26,8 +27,22 @@ RULES:
 OUTPUT: ONLY valid JSON of shape { "<layerId>": "<NewName>", ... }
 Include every layer id from the tree. No prose. No code fences. No explanations.`;
 
-const ICON_SYSTEM_PROMPT =
-  "You pick exactly 4 icon names from a provided catalog that best match a user's search query. Respond with ONLY a JSON array of 4 strings from the catalog. No prose, no markdown.";
+const ICON_SYSTEM_PROMPT = `You help a designer find 4 icons matching their query across 4 open-source icon libraries.
+
+Return EXACTLY 4 items as a JSON array. Each item is one of:
+
+  Catalog match:
+    { "library": "phosphor" | "lucide" | "heroicons" | "material", "name": "<exact-name-from-catalog>" }
+
+  Custom inline SVG (last resort only when NO catalog has a decent match):
+    { "library": "custom", "name": "<short-kebab-descriptor>", "svg": "<inline svg...>" }
+
+Rules:
+- Prefer catalog matches. Custom SVGs should be rare.
+- Each "name" must match its library's catalog exactly (case-sensitive).
+- Custom SVG must be 24x24 with viewBox="0 0 24 24", stroke-based (stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round").
+- Do not repeat anything in the Exclude list.
+- Output JSON only, no prose, no code fences.`;
 
 export class ClaudeError extends Error {
   readonly status: number;
@@ -113,9 +128,14 @@ export function parseRenameResponse(raw: unknown): Record<string, string> {
   return out;
 }
 
-// Parses Claude's icon response envelope and returns up to 4 catalog-valid names.
+// Parses Claude's icon response envelope and returns up to 4 valid suggestions.
+// Each suggestion is either a catalog match (library + name) or a custom
+// AI-generated SVG. Catalog names are validated against the library's set.
 // Exported for unit testing.
-export function parseIconResponse(raw: unknown, catalog: readonly string[]): string[] {
+export function parseIconResponse(
+  raw: unknown,
+  catalogs: Record<IconLibrary, ReadonlySet<string>>,
+): IconSuggestion[] {
   const text = extractText(raw);
 
   let parsed: unknown;
@@ -129,17 +149,44 @@ export function parseIconResponse(raw: unknown, catalog: readonly string[]): str
     throw new ClaudeError('response is not a JSON array');
   }
 
-  const catalogSet = new Set(catalog);
-  const out: string[] = [];
+  const seenIds = new Set<string>();
+  const out: IconSuggestion[] = [];
   for (const item of parsed) {
-    if (typeof item !== 'string') continue;
-    const trimmed = item.trim();
-    if (catalogSet.has(trimmed) && !out.includes(trimmed)) {
-      out.push(trimmed);
-      if (out.length >= 4) break;
-    }
+    const suggestion = toSuggestion(item, catalogs);
+    if (!suggestion) continue;
+    const id = suggestion.kind === 'library' ? `${suggestion.library}:${suggestion.name}` : `custom:${suggestion.name}`;
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+    out.push(suggestion);
+    if (out.length >= 4) break;
   }
   return out;
+}
+
+function toSuggestion(
+  item: unknown,
+  catalogs: Record<IconLibrary, ReadonlySet<string>>,
+): IconSuggestion | null {
+  if (!item || typeof item !== 'object') return null;
+  const raw = item as { library?: unknown; name?: unknown; svg?: unknown };
+  if (typeof raw.library !== 'string' || typeof raw.name !== 'string') return null;
+  const name = raw.name.trim();
+  if (!name) return null;
+
+  if (raw.library === 'custom') {
+    if (typeof raw.svg !== 'string') return null;
+    const svg = raw.svg.trim();
+    if (!svg.startsWith('<svg')) return null;
+    return { kind: 'custom', name, svg };
+  }
+
+  if (raw.library === 'phosphor' || raw.library === 'lucide' || raw.library === 'heroicons' || raw.library === 'material') {
+    const catalog = catalogs[raw.library];
+    if (!catalog.has(name)) return null;
+    return { kind: 'library', library: raw.library, name };
+  }
+
+  return null;
 }
 
 function buildRenameBody(pngBase64: string, tree: TreeNode) {
@@ -162,15 +209,22 @@ function buildRenameBody(pngBase64: string, tree: TreeNode) {
   };
 }
 
-function buildIconBody(query: string, catalog: readonly string[], exclude: readonly string[]) {
+function buildIconBody(
+  query: string,
+  catalogs: Record<IconLibrary, readonly string[]>,
+  exclude: readonly string[],
+) {
   const text =
-    `Query: ${query}\n` +
-    `Catalog: ${catalog.join(', ')}\n` +
-    `Exclude: ${exclude.join(', ') || '(none)'}\n` +
-    `Return a JSON array of 4 icon names from the catalog, not in the exclude list.`;
+    `Query: ${query}\n\n` +
+    `phosphor catalog (kebab-case): ${catalogs.phosphor.join(', ')}\n\n` +
+    `lucide catalog (kebab-case): ${catalogs.lucide.join(', ')}\n\n` +
+    `heroicons catalog (kebab-case): ${catalogs.heroicons.join(', ')}\n\n` +
+    `material catalog (snake_case): ${catalogs.material.join(', ')}\n\n` +
+    `Exclude (already shown): ${exclude.join(', ') || '(none)'}\n\n` +
+    `Return a JSON array of EXACTLY 4 items, each either a catalog match or a custom SVG.`;
   return {
     model: MODEL,
-    max_tokens: 200,
+    max_tokens: 2000,
     system: ICON_SYSTEM_PROMPT,
     messages: [
       {
@@ -217,14 +271,20 @@ async function renameOnce(
 async function iconsOnce(
   apiKey: string,
   query: string,
-  catalog: readonly string[],
+  catalogs: Record<IconLibrary, readonly string[]>,
   exclude: readonly string[],
   signal?: AbortSignal,
-): Promise<{ names: string[]; usage: ClaudeUsage }> {
-  const json = await postClaude(apiKey, buildIconBody(query, catalog, exclude), signal);
-  const names = parseIconResponse(json, catalog);
+): Promise<{ suggestions: IconSuggestion[]; usage: ClaudeUsage }> {
+  const json = await postClaude(apiKey, buildIconBody(query, catalogs, exclude), signal);
+  const sets: Record<IconLibrary, ReadonlySet<string>> = {
+    phosphor: new Set(catalogs.phosphor),
+    lucide: new Set(catalogs.lucide),
+    heroicons: new Set(catalogs.heroicons),
+    material: new Set(catalogs.material),
+  };
+  const suggestions = parseIconResponse(json, sets);
   const usage = extractUsage(json);
-  return { names, usage };
+  return { suggestions, usage };
 }
 
 function isNonRetryable(err: unknown): boolean {
@@ -256,14 +316,14 @@ export async function renameWithClaude(
 export async function suggestIconsWithClaude(
   apiKey: string,
   query: string,
-  catalog: readonly string[],
+  catalogs: Record<IconLibrary, readonly string[]>,
   exclude: readonly string[],
   signal?: AbortSignal,
-): Promise<{ names: string[]; usage: ClaudeUsage }> {
+): Promise<{ suggestions: IconSuggestion[]; usage: ClaudeUsage }> {
   try {
-    return await iconsOnce(apiKey, query, catalog, exclude, signal);
+    return await iconsOnce(apiKey, query, catalogs, exclude, signal);
   } catch (err) {
     if (isNonRetryable(err)) throw err;
-    return await iconsOnce(apiKey, query, catalog, exclude, signal);
+    return await iconsOnce(apiKey, query, catalogs, exclude, signal);
   }
 }

@@ -3,7 +3,9 @@ import { send } from './bridge';
 import { suggestIconsWithGemini, friendlyGeminiError } from './api/gemini';
 import { suggestIconsWithClaude, friendlyClaudeError } from './api/claude';
 import { PHOSPHOR_ICONS } from './icons/catalog';
-import { fetchPhosphorSvg } from './icons/phosphor';
+import { LUCIDE_ICONS, HEROICONS, MATERIAL_ICONS } from './icons/catalogs';
+import { fetchIconSvg } from './icons/fetchers';
+import { suggestionId, type IconLibrary, type IconSuggestion } from './icons/types';
 import {
   getIconsStore,
   setQuery as storeSetQuery,
@@ -19,6 +21,13 @@ type Props = {
   settings: Settings | null;
 };
 
+const CATALOGS: Record<IconLibrary, readonly string[]> = {
+  phosphor: PHOSPHOR_ICONS,
+  lucide: LUCIDE_ICONS,
+  heroicons: HEROICONS,
+  material: MATERIAL_ICONS,
+};
+
 export function IconsPanel({ settings }: Props) {
   const [, forceRender] = useState({});
   const store = getIconsStore();
@@ -30,7 +39,6 @@ export function IconsPanel({ settings }: Props) {
   const hasApiKey = Boolean(apiKey);
 
   useEffect(() => {
-    // subscribeIconsStore calls notify on store changes; force-render on each.
     return subscribeIconsStore(() => forceRender({}));
   }, []);
 
@@ -56,14 +64,14 @@ export function IconsPanel({ settings }: Props) {
     try {
       const exclude = [...seen];
       const result = provider === 'claude'
-        ? await suggestIconsWithClaude(apiKey, query.trim(), PHOSPHOR_ICONS, exclude, controller.signal)
-        : await suggestIconsWithGemini(apiKey, query.trim(), PHOSPHOR_ICONS, exclude, controller.signal);
+        ? await suggestIconsWithClaude(apiKey, query.trim(), CATALOGS, exclude, controller.signal)
+        : await suggestIconsWithGemini(apiKey, query.trim(), CATALOGS, exclude, controller.signal);
       if (controller.signal.aborted) return;
       recordTokens('icons', result.usage.inputTokens, result.usage.outputTokens);
 
-      addSeen(result.names);
+      addSeen(result.suggestions.map(suggestionId));
 
-      if (result.names.length === 0) {
+      if (result.suggestions.length === 0) {
         const current = getIconsStore().panelState;
         const previous = current.kind === 'results' ? current.data : undefined;
         setPanelState({ kind: 'error', message: 'No more matches — try a different search.', previous });
@@ -72,9 +80,14 @@ export function IconsPanel({ settings }: Props) {
 
       const svgs: Record<string, string> = {};
       await Promise.all(
-        result.names.map(async (name) => {
+        result.suggestions.map(async (s) => {
+          const id = suggestionId(s);
+          if (s.kind === 'custom') {
+            svgs[id] = s.svg;
+            return;
+          }
           try {
-            svgs[name] = await fetchPhosphorSvg(name, 'regular', controller.signal);
+            svgs[id] = await fetchIconSvg(s.library, s.name, controller.signal);
           } catch {
             // Skip icons that failed to fetch — still show others.
           }
@@ -82,8 +95,8 @@ export function IconsPanel({ settings }: Props) {
       );
       if (controller.signal.aborted) return;
 
-      const fetched = result.names.filter((n) => svgs[n]);
-      setPanelState({ kind: 'results', data: { names: fetched, svgs }, loadingMore: false });
+      const fetched = result.suggestions.filter((s) => svgs[suggestionId(s)]);
+      setPanelState({ kind: 'results', data: { suggestions: fetched, svgs }, loadingMore: false });
     } catch (err) {
       if (controller.signal.aborted) return;
       const msg = provider === 'claude' ? friendlyClaudeError(err) : friendlyGeminiError(err);
@@ -93,8 +106,8 @@ export function IconsPanel({ settings }: Props) {
     }
   }
 
-  function insert(name: string, svg: string) {
-    send({ type: 'insert-svg', svg, name: `Icon_${toPascal(name)}` });
+  function insert(s: IconSuggestion, svg: string) {
+    send({ type: 'insert-svg', svg, name: `Icon_${toPascal(s.name)}` });
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -134,7 +147,7 @@ export function IconsPanel({ settings }: Props) {
         {state.kind === 'idle' && (
           <div className="empty">
             <h2>Find an icon</h2>
-            <p>Describe what you need. AI picks the 4 closest matches; click to drop on the canvas.</p>
+            <p>Describe what you need. AI picks 4 matches from Phosphor, Lucide, Heroicons, and Material — or designs one if nothing fits.</p>
           </div>
         )}
 
@@ -148,19 +161,25 @@ export function IconsPanel({ settings }: Props) {
 
         {currentResults && (
           <div className="icons-grid" aria-busy={isSearching}>
-            {currentResults.names.map((name) => (
-              <button
-                key={name}
-                type="button"
-                className="icon-card"
-                onClick={() => insert(name, currentResults.svgs[name])}
-                aria-label={`Insert ${name}`}
-                title={`Insert ${name}`}
-              >
-                <span className="icon-preview" aria-hidden dangerouslySetInnerHTML={{ __html: currentResults.svgs[name] }} />
-                <span className="icon-name">{name}</span>
-              </button>
-            ))}
+            {currentResults.suggestions.map((s) => {
+              const id = suggestionId(s);
+              const svg = currentResults.svgs[id];
+              const sourceLabel = s.kind === 'library' ? libraryLabel(s.library) : 'AI';
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className="icon-card"
+                  onClick={() => insert(s, svg)}
+                  aria-label={`Insert ${s.name}`}
+                  title={`Insert ${s.name} (${sourceLabel})`}
+                >
+                  <span className="icon-preview" aria-hidden dangerouslySetInnerHTML={{ __html: svg }} />
+                  <span className="icon-name">{s.name}</span>
+                  <span className="icon-source">{sourceLabel}</span>
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -177,9 +196,18 @@ export function IconsPanel({ settings }: Props) {
   );
 }
 
+function libraryLabel(library: IconLibrary): string {
+  switch (library) {
+    case 'phosphor': return 'Phosphor';
+    case 'lucide': return 'Lucide';
+    case 'heroicons': return 'Heroicons';
+    case 'material': return 'Material';
+  }
+}
+
 function toPascal(kebab: string): string {
   return kebab
-    .split('-')
+    .split(/[-_]/)
     .map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1))
     .join('');
 }

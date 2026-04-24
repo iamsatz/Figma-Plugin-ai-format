@@ -1,4 +1,5 @@
 import type { TreeNode } from '../../core/types';
+import type { IconLibrary, IconSuggestion } from '../icons/types';
 
 const ENDPOINT =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
@@ -26,8 +27,22 @@ RULES:
 OUTPUT: ONLY valid JSON of shape { "<layerId>": "<NewName>", ... }
 Include every layer id from the tree. No prose. No code fences. No explanations.`;
 
-const ICON_SYSTEM_PROMPT =
-  "You pick exactly 4 icon names from a provided catalog that best match a user's search query. Respond with ONLY a JSON array of 4 strings from the catalog. No prose, no markdown.";
+const ICON_SYSTEM_PROMPT = `You help a designer find 4 icons matching their query across 4 open-source icon libraries.
+
+Return EXACTLY 4 items as a JSON array. Each item is one of:
+
+  Catalog match:
+    { "library": "phosphor" | "lucide" | "heroicons" | "material", "name": "<exact-name-from-catalog>" }
+
+  Custom inline SVG (last resort only when NO catalog has a decent match):
+    { "library": "custom", "name": "<short-kebab-descriptor>", "svg": "<inline svg...>" }
+
+Rules:
+- Prefer catalog matches. Custom SVGs should be rare.
+- Each "name" must match its library's catalog exactly (case-sensitive).
+- Custom SVG must be 24x24 with viewBox="0 0 24 24", stroke-based (stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round").
+- Do not repeat anything in the Exclude list.
+- Output JSON only, no prose, no code fences.`;
 
 export class GeminiError extends Error {
   readonly status: number;
@@ -49,6 +64,14 @@ export function friendlyGeminiError(err: unknown): string {
 
 type GeminiUsage = { inputTokens: number; outputTokens: number };
 
+type GeminiSchema = {
+  type: 'object' | 'array' | 'string';
+  additionalProperties?: GeminiSchema;
+  items?: GeminiSchema;
+  properties?: Record<string, GeminiSchema>;
+  required?: string[];
+};
+
 type GeminiBody = {
   contents: Array<{
     role: 'user';
@@ -60,12 +83,9 @@ type GeminiBody = {
   systemInstruction?: { parts: Array<{ text: string }> };
   generationConfig: {
     responseMimeType: 'application/json';
-    responseSchema: {
-      type: 'object' | 'array';
-      additionalProperties?: { type: 'string' };
-      items?: { type: 'string' };
-    };
+    responseSchema: GeminiSchema;
     temperature: number;
+    maxOutputTokens?: number;
   };
 };
 
@@ -92,19 +112,38 @@ function buildRenameBody(pngBase64: string, tree: TreeNode): GeminiBody {
   };
 }
 
-function buildIconBody(query: string, catalog: readonly string[], exclude: readonly string[]): GeminiBody {
+function buildIconBody(
+  query: string,
+  catalogs: Record<IconLibrary, readonly string[]>,
+  exclude: readonly string[],
+): GeminiBody {
   const text =
     `${ICON_SYSTEM_PROMPT}\n\n` +
-    `Query: ${query}\n` +
-    `Catalog: ${catalog.join(', ')}\n` +
-    `Exclude: ${exclude.join(', ') || '(none)'}\n` +
-    `Return a JSON array of 4 icon names from the catalog, not in the exclude list.`;
+    `Query: ${query}\n\n` +
+    `phosphor catalog (kebab-case): ${catalogs.phosphor.join(', ')}\n\n` +
+    `lucide catalog (kebab-case): ${catalogs.lucide.join(', ')}\n\n` +
+    `heroicons catalog (kebab-case): ${catalogs.heroicons.join(', ')}\n\n` +
+    `material catalog (snake_case): ${catalogs.material.join(', ')}\n\n` +
+    `Exclude (already shown): ${exclude.join(', ') || '(none)'}\n\n` +
+    `Return a JSON array of EXACTLY 4 items, each either a catalog match or a custom SVG.`;
   return {
     contents: [{ role: 'user', parts: [{ text }] }],
     generationConfig: {
       responseMimeType: 'application/json',
-      responseSchema: { type: 'array', items: { type: 'string' } },
+      responseSchema: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            library: { type: 'string' },
+            name: { type: 'string' },
+            svg: { type: 'string' },
+          },
+          required: ['library', 'name'],
+        },
+      },
       temperature: 0.3,
+      maxOutputTokens: 2000,
     },
   };
 }
@@ -155,7 +194,10 @@ export function parseResponse(raw: unknown): Record<string, string> {
   return out;
 }
 
-export function parseIconResponse(raw: unknown, catalog: readonly string[]): string[] {
+export function parseIconResponse(
+  raw: unknown,
+  catalogs: Record<IconLibrary, ReadonlySet<string>>,
+): IconSuggestion[] {
   const text = extractText(raw);
   let parsed: unknown;
   try {
@@ -164,17 +206,45 @@ export function parseIconResponse(raw: unknown, catalog: readonly string[]): str
     throw new GeminiError('invalid JSON in response');
   }
   if (!Array.isArray(parsed)) throw new GeminiError('response is not a JSON array');
-  const set = new Set(catalog);
-  const out: string[] = [];
+
+  const seenIds = new Set<string>();
+  const out: IconSuggestion[] = [];
   for (const item of parsed) {
-    if (typeof item !== 'string') continue;
-    const trimmed = item.trim();
-    if (set.has(trimmed) && !out.includes(trimmed)) {
-      out.push(trimmed);
-      if (out.length >= 4) break;
-    }
+    const suggestion = toSuggestion(item, catalogs);
+    if (!suggestion) continue;
+    const id = suggestion.kind === 'library' ? `${suggestion.library}:${suggestion.name}` : `custom:${suggestion.name}`;
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+    out.push(suggestion);
+    if (out.length >= 4) break;
   }
   return out;
+}
+
+function toSuggestion(
+  item: unknown,
+  catalogs: Record<IconLibrary, ReadonlySet<string>>,
+): IconSuggestion | null {
+  if (!item || typeof item !== 'object') return null;
+  const raw = item as { library?: unknown; name?: unknown; svg?: unknown };
+  if (typeof raw.library !== 'string' || typeof raw.name !== 'string') return null;
+  const name = raw.name.trim();
+  if (!name) return null;
+
+  if (raw.library === 'custom') {
+    if (typeof raw.svg !== 'string') return null;
+    const svg = raw.svg.trim();
+    if (!svg.startsWith('<svg')) return null;
+    return { kind: 'custom', name, svg };
+  }
+
+  if (raw.library === 'phosphor' || raw.library === 'lucide' || raw.library === 'heroicons' || raw.library === 'material') {
+    const catalog = catalogs[raw.library];
+    if (!catalog.has(name)) return null;
+    return { kind: 'library', library: raw.library, name };
+  }
+
+  return null;
 }
 
 async function postGemini(apiKey: string, body: GeminiBody, signal?: AbortSignal): Promise<unknown> {
@@ -216,12 +286,18 @@ async function renameOnce(
 async function iconsOnce(
   apiKey: string,
   query: string,
-  catalog: readonly string[],
+  catalogs: Record<IconLibrary, readonly string[]>,
   exclude: readonly string[],
   signal?: AbortSignal,
-): Promise<{ names: string[]; usage: GeminiUsage }> {
-  const json = await postGemini(apiKey, buildIconBody(query, catalog, exclude), signal);
-  return { names: parseIconResponse(json, catalog), usage: extractUsage(json) };
+): Promise<{ suggestions: IconSuggestion[]; usage: GeminiUsage }> {
+  const json = await postGemini(apiKey, buildIconBody(query, catalogs, exclude), signal);
+  const sets: Record<IconLibrary, ReadonlySet<string>> = {
+    phosphor: new Set(catalogs.phosphor),
+    lucide: new Set(catalogs.lucide),
+    heroicons: new Set(catalogs.heroicons),
+    material: new Set(catalogs.material),
+  };
+  return { suggestions: parseIconResponse(json, sets), usage: extractUsage(json) };
 }
 
 export async function renameWithGemini(
@@ -241,14 +317,14 @@ export async function renameWithGemini(
 export async function suggestIconsWithGemini(
   apiKey: string,
   query: string,
-  catalog: readonly string[],
+  catalogs: Record<IconLibrary, readonly string[]>,
   exclude: readonly string[],
   signal?: AbortSignal,
-): Promise<{ names: string[]; usage: GeminiUsage }> {
+): Promise<{ suggestions: IconSuggestion[]; usage: GeminiUsage }> {
   try {
-    return await iconsOnce(apiKey, query, catalog, exclude, signal);
+    return await iconsOnce(apiKey, query, catalogs, exclude, signal);
   } catch (err) {
     if (isNonRetryable(err)) throw err;
-    return await iconsOnce(apiKey, query, catalog, exclude, signal);
+    return await iconsOnce(apiKey, query, catalogs, exclude, signal);
   }
 }

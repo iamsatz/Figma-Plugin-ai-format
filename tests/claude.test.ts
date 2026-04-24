@@ -90,95 +90,136 @@ describe('parseRenameResponse', () => {
 });
 
 describe('parseIconResponse', () => {
-  const catalog = ['home', 'user', 'settings', 'search', 'bell', 'heart'] as const;
+  const catalogs = {
+    phosphor: new Set(['heart', 'home', 'user', 'gear']),
+    lucide: new Set(['heart', 'home', 'settings']),
+    heroicons: new Set(['heart', 'home', 'cog-6-tooth']),
+    material: new Set(['favorite', 'home', 'settings']),
+  };
 
-  it('returns names matching the catalog', () => {
-    const envelope = {
-      content: [{ type: 'text', text: '["home","user","settings","search"]' }],
-    };
-    const result = parseIconResponse(envelope, catalog);
-    assert.deepEqual(result, ['home', 'user', 'settings', 'search']);
+  function envelope(text: string) {
+    return { content: [{ type: 'text', text }] };
+  }
+
+  it('returns catalog matches across libraries', () => {
+    const text = JSON.stringify([
+      { library: 'phosphor', name: 'heart' },
+      { library: 'lucide', name: 'settings' },
+      { library: 'heroicons', name: 'home' },
+      { library: 'material', name: 'favorite' },
+    ]);
+    const result = parseIconResponse(envelope(text), catalogs);
+    assert.deepEqual(result, [
+      { kind: 'library', library: 'phosphor', name: 'heart' },
+      { kind: 'library', library: 'lucide', name: 'settings' },
+      { kind: 'library', library: 'heroicons', name: 'home' },
+      { kind: 'library', library: 'material', name: 'favorite' },
+    ]);
   });
 
-  it('filters out names not in the catalog', () => {
-    const envelope = {
-      content: [{ type: 'text', text: '["home","bogus","settings","xyz"]' }],
-    };
-    const result = parseIconResponse(envelope, catalog);
-    assert.deepEqual(result, ['home', 'settings']);
+  it('filters out names not present in the named library', () => {
+    const text = JSON.stringify([
+      { library: 'phosphor', name: 'heart' },
+      { library: 'phosphor', name: 'not-in-catalog' },
+      { library: 'lucide', name: 'settings' },
+      { library: 'lucide', name: 'gear' },
+    ]);
+    const result = parseIconResponse(envelope(text), catalogs);
+    assert.deepEqual(result, [
+      { kind: 'library', library: 'phosphor', name: 'heart' },
+      { kind: 'library', library: 'lucide', name: 'settings' },
+    ]);
   });
 
-  it('caps at 4 names when more are returned', () => {
-    const envelope = {
-      content: [
-        { type: 'text', text: '["home","user","settings","search","bell","heart"]' },
-      ],
-    };
-    const result = parseIconResponse(envelope, catalog);
+  it('caps at 4 items', () => {
+    const text = JSON.stringify([
+      { library: 'phosphor', name: 'heart' },
+      { library: 'phosphor', name: 'home' },
+      { library: 'phosphor', name: 'user' },
+      { library: 'phosphor', name: 'gear' },
+      { library: 'lucide', name: 'home' },
+      { library: 'lucide', name: 'heart' },
+    ]);
+    const result = parseIconResponse(envelope(text), catalogs);
     assert.equal(result.length, 4);
-    assert.deepEqual(result, ['home', 'user', 'settings', 'search']);
   });
 
-  it('returns empty array when catalog has no matches', () => {
-    const envelope = {
-      content: [{ type: 'text', text: '["a","b","c"]' }],
-    };
-    assert.deepEqual(parseIconResponse(envelope, catalog), []);
+  it('accepts custom SVG items', () => {
+    const text = JSON.stringify([
+      { library: 'phosphor', name: 'heart' },
+      { library: 'custom', name: 'banana-split', svg: '<svg viewBox="0 0 24 24"></svg>' },
+    ]);
+    const result = parseIconResponse(envelope(text), catalogs);
+    assert.deepEqual(result, [
+      { kind: 'library', library: 'phosphor', name: 'heart' },
+      { kind: 'custom', name: 'banana-split', svg: '<svg viewBox="0 0 24 24"></svg>' },
+    ]);
+  });
+
+  it('rejects custom items without svg field or bad svg string', () => {
+    const text = JSON.stringify([
+      { library: 'custom', name: 'missing-svg' },
+      { library: 'custom', name: 'not-svg', svg: '<div />' },
+      { library: 'phosphor', name: 'heart' },
+    ]);
+    const result = parseIconResponse(envelope(text), catalogs);
+    assert.deepEqual(result, [
+      { kind: 'library', library: 'phosphor', name: 'heart' },
+    ]);
+  });
+
+  it('rejects unknown library values', () => {
+    const text = JSON.stringify([
+      { library: 'bootstrap', name: 'heart' },
+      { library: 'phosphor', name: 'home' },
+    ]);
+    const result = parseIconResponse(envelope(text), catalogs);
+    assert.deepEqual(result, [
+      { kind: 'library', library: 'phosphor', name: 'home' },
+    ]);
+  });
+
+  it('deduplicates on library:name pair', () => {
+    const text = JSON.stringify([
+      { library: 'phosphor', name: 'heart' },
+      { library: 'phosphor', name: 'heart' },
+      { library: 'lucide', name: 'heart' },
+    ]);
+    const result = parseIconResponse(envelope(text), catalogs);
+    assert.deepEqual(result, [
+      { kind: 'library', library: 'phosphor', name: 'heart' },
+      { kind: 'library', library: 'lucide', name: 'heart' },
+    ]);
   });
 
   it('handles empty array response', () => {
-    const envelope = {
-      content: [{ type: 'text', text: '[]' }],
-    };
-    assert.deepEqual(parseIconResponse(envelope, catalog), []);
-  });
-
-  it('drops non-string entries', () => {
-    const envelope = {
-      content: [{ type: 'text', text: '["home",42,null,"user"]' }],
-    };
-    const result = parseIconResponse(envelope, catalog);
-    assert.deepEqual(result, ['home', 'user']);
-  });
-
-  it('deduplicates matches', () => {
-    const envelope = {
-      content: [{ type: 'text', text: '["home","home","user"]' }],
-    };
-    const result = parseIconResponse(envelope, catalog);
-    assert.deepEqual(result, ['home', 'user']);
+    assert.deepEqual(parseIconResponse(envelope('[]'), catalogs), []);
   });
 
   it('throws on invalid JSON', () => {
-    const envelope = {
-      content: [{ type: 'text', text: 'not json' }],
-    };
     assert.throws(
-      () => parseIconResponse(envelope, catalog),
+      () => parseIconResponse(envelope('not json'), catalogs),
       (err: Error) => err instanceof ClaudeError && /invalid JSON/.test(err.message),
     );
   });
 
   it('throws when response is an object instead of an array', () => {
-    const envelope = {
-      content: [{ type: 'text', text: '{"a":"home"}' }],
-    };
     assert.throws(
-      () => parseIconResponse(envelope, catalog),
+      () => parseIconResponse(envelope('{"a":"home"}'), catalogs),
       (err: Error) => err instanceof ClaudeError && /not a JSON array/.test(err.message),
     );
   });
 
   it('throws on empty envelope', () => {
     assert.throws(
-      () => parseIconResponse(null, catalog),
+      () => parseIconResponse(null, catalogs),
       (err: Error) => err instanceof ClaudeError,
     );
   });
 
   it('throws on api error', () => {
     assert.throws(
-      () => parseIconResponse({ error: { message: 'rate limited' } }, catalog),
+      () => parseIconResponse({ error: { message: 'rate limited' } }, catalogs),
       (err: Error) => err instanceof ClaudeError && /rate limited/.test(err.message),
     );
   });
