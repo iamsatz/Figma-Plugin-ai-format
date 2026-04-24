@@ -67,6 +67,8 @@ export type Fix = RenameFix | AutoLayoutFix | SpacingFix | ReorderFix;
 
 export type Scope = 'selection' | 'page' | 'file';
 
+export type LayoutHint = 'auto' | 'vertical' | 'horizontal' | 'grid' | 'card' | 'form';
+
 export type ScanStats = {
   framesScanned: number;
   nodesWalked: number;
@@ -93,7 +95,7 @@ export type UiToPluginMessage =
   | { type: 'ping' }
   | { type: 'get-settings' }
   | { type: 'save-settings'; payload: Settings }
-  | { type: 'scan'; scope: Scope }
+  | { type: 'scan'; scope: Scope; layoutHint: LayoutHint }
   | { type: 'apply'; fixIds: string[] }
   | { type: 'jump-to-node'; nodeId: string }
   | {

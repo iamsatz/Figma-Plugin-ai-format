@@ -364,6 +364,38 @@ button.link:focus-visible {
   display: none;
 }
 
+.hint-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.hint-bar-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.hint-bar-select {
+  flex: 1;
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.hint-bar-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* scan meta: count + stats row */
 .scan-meta {
   display: flex;

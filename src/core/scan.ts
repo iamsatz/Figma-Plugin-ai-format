@@ -1,4 +1,4 @@
-import type { Fix, RenameCandidate, Scope, ScanStats, Settings } from './types';
+import type { Fix, LayoutHint, RenameCandidate, Scope, ScanStats, Settings } from './types';
 import type { FrameSnapshot, LayoutMode } from './snapshot';
 import { inferAutoLayout } from './infer-autolayout';
 import { snapValue, type SnapConfig } from './snap-spacing';
@@ -29,7 +29,7 @@ const CONTAINER_TYPES = new Set<NodeType>([
   'SECTION',
 ]);
 
-export async function scan(scope: Scope, settings: Settings): Promise<ScanResult> {
+export async function scan(scope: Scope, settings: Settings, layoutHint: LayoutHint = 'auto'): Promise<ScanResult> {
   const started = Date.now();
   const roots = collectRoots(scope);
   const snap: SnapConfig = { gridPx: settings.gridPx, tokens: settings.tokens };
@@ -45,7 +45,7 @@ export async function scan(scope: Scope, settings: Settings): Promise<ScanResult
       if (!CONTAINER_TYPES.has(node.type)) return;
       if (isSkipped(node, ignore)) return;
       framesScanned++;
-      collectFixesForContainer(node, snap, fixes);
+      collectFixesForContainer(node, snap, fixes, layoutHint);
     });
   }
 
@@ -141,6 +141,7 @@ function collectFixesForContainer(
   node: SceneNode,
   snap: SnapConfig,
   fixes: Fix[],
+  layoutHint: LayoutHint = 'auto',
 ): void {
   const snapshot = toSnapshot(node);
   if (!snapshot) return;
@@ -151,7 +152,7 @@ function collectFixesForContainer(
       : 'NONE';
 
   if (mode === 'NONE') {
-    const inferred = inferAutoLayout(snapshot, snap);
+    const inferred = inferAutoLayout(snapshot, snap, layoutHint);
     if (inferred) {
       fixes.push({
         id: `al:${snapshot.id}`,

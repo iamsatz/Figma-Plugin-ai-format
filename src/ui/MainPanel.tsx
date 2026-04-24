@@ -5,7 +5,7 @@ import { renameWithGemini, friendlyGeminiError } from './api/gemini';
 import { renameWithClaude, friendlyClaudeError } from './api/claude';
 import { fallbackNames } from './api/fallback-names';
 import { recordTokens } from './token-usage';
-import type { Fix, RenameCandidate, ScanStats, Scope, Settings } from '../core/types';
+import type { Fix, LayoutHint, RenameCandidate, ScanStats, Scope, Settings } from '../core/types';
 
 type Props = {
   settings: Settings | null;
@@ -33,6 +33,7 @@ function defaultChecked(fixes: Fix[]): Set<string> {
 
 export function MainPanel({ settings, onGoToSettings }: Props) {
   const [scope, setScopeRaw] = useState<Scope>('selection');
+  const [layoutHint, setLayoutHint] = useState<LayoutHint>('auto');
   const [state, setState] = useState<ScanState>({ kind: 'idle' });
   const [naming, setNaming] = useState<NamingState>({ kind: 'none' });
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -164,12 +165,21 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
     }
   }
 
+  function handleLayoutHint(next: LayoutHint) {
+    setLayoutHint(next);
+    if (state.kind !== 'idle' && state.kind !== 'running') {
+      setState({ kind: 'idle' });
+      setCheckedIds(new Set());
+      setNaming({ kind: 'none' });
+    }
+  }
+
   function runScan() {
     abortRef.current?.abort();
     setState({ kind: 'running' });
     setCheckedIds(new Set());
     setNaming({ kind: 'none' });
-    send({ type: 'scan', scope });
+    send({ type: 'scan', scope, layoutHint });
   }
 
   function discard() {
@@ -240,6 +250,24 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
         >
           {state.kind === 'running' ? 'Scanning…' : scanned ? 'Rescan' : 'Scan'}
         </button>
+      </div>
+
+      <div className="hint-bar">
+        <label htmlFor="layout-hint" className="hint-bar-label">Layout</label>
+        <select
+          id="layout-hint"
+          className="hint-bar-select"
+          value={layoutHint}
+          onChange={(e) => handleLayoutHint(e.target.value as LayoutHint)}
+          disabled={state.kind === 'running' || applying}
+        >
+          <option value="auto">Auto-detect</option>
+          <option value="vertical">Vertical list</option>
+          <option value="horizontal">Horizontal list</option>
+          <option value="grid">Grid</option>
+          <option value="card">Card</option>
+          <option value="form">Form</option>
+        </select>
       </div>
 
       {state.kind === 'running' && (

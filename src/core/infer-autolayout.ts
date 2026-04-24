@@ -1,5 +1,6 @@
 import type { ChildSnapshot, FrameSnapshot } from './snapshot';
 import { snapValue, type SnapConfig } from './snap-spacing';
+import type { LayoutHint } from './types';
 
 export type AutoLayoutInference = {
   direction: 'VERTICAL' | 'HORIZONTAL';
@@ -14,6 +15,7 @@ const HORIZONTAL_RATIO = 1 / VERTICAL_RATIO;
 export function inferAutoLayout(
   frame: FrameSnapshot,
   snap: SnapConfig,
+  layoutHint: LayoutHint = 'auto',
 ): AutoLayoutInference | null {
   if (frame.children.length < 2) return null;
   if (frame.layoutMode !== 'NONE') return null;
@@ -56,6 +58,14 @@ export function inferAutoLayout(
 
   if (hasMultiRowGrid(sorted, direction)) {
     confidence = 'review';
+  }
+
+  // Apply directional hint: when hint matches geometry, upgrade to high confidence.
+  // When hint contradicts geometry, suppress the fix — the user knows their layout.
+  if (layoutHint === 'vertical' || layoutHint === 'horizontal') {
+    const hintDir = layoutHint === 'vertical' ? 'VERTICAL' : 'HORIZONTAL';
+    if (hintDir !== direction) return null;
+    confidence = 'high';
   }
 
   return { direction, itemSpacing, padding, confidence };

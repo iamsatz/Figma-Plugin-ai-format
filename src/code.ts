@@ -27,7 +27,7 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
       case 'scan': {
         const settings = await getSettings();
         send({ type: 'scan-progress', phase: 'walking' });
-        const result = await scan(msg.scope, settings);
+        const result = await scan(msg.scope, settings, msg.layoutHint);
         lastFixesById = new Map(result.fixes.map((f) => [f.id, f]));
         console.log('[restructure] scan', result.stats, result.fixes.length, 'fixes,', result.renameCandidates.length, 'rename candidates');
         send({
