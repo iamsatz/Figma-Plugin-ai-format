@@ -96,6 +96,11 @@ body,
   border-bottom-color: var(--accent);
 }
 
+.tabs button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* The panel area scrolls; the footer is sticky. */
 .panel {
   flex: 1;
@@ -160,8 +165,8 @@ button.link:focus-visible {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
+  gap: 3px;
+  margin-bottom: 10px;
 }
 
 .field label {
@@ -641,7 +646,7 @@ button.link:focus-visible {
 .icons-search {
   display: flex;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -664,21 +669,21 @@ button.link:focus-visible {
 .icons-body {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 10px 12px;
 }
 
 .icons-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  gap: 6px;
 }
 
 .icon-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 12px 8px;
+  gap: 4px;
+  padding: 8px 6px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -686,7 +691,7 @@ button.link:focus-visible {
   font: inherit;
   color: var(--text);
   transition: background 0.1s, border-color 0.1s;
-  min-height: 84px;
+  min-height: 72px;
 }
 
 .icon-card.skeleton {
@@ -739,18 +744,6 @@ button.link:focus-visible {
   line-height: 1.25;
 }
 
-.icons-more {
-  display: block;
-  margin: 12px auto 0;
-}
-
-.icons-provider-note {
-  padding: 6px 16px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
 
 /* ── Token usage bar ──────────────────────────── */
 
@@ -800,5 +793,68 @@ button.link:focus-visible {
 .settings-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 12px 16px 4px;
+}
+
+.settings-section {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.settings-section-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: none;
+  font: inherit;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-section-header:hover {
+  background: var(--bg-hover);
+}
+
+.settings-section-header:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.settings-section-title {
+  flex: 1;
+}
+
+.settings-section-status {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.settings-section-status--ok {
+  background: color-mix(in srgb, var(--success) 18%, var(--bg));
+  color: var(--success);
+}
+
+.settings-section-status--warn {
+  background: color-mix(in srgb, var(--badge-amber) 20%, var(--bg));
+  color: var(--badge-amber);
+}
+
+.settings-section-body {
+  padding: 10px 10px 2px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.settings-section-body .field:last-child {
+  margin-bottom: 8px;
 }

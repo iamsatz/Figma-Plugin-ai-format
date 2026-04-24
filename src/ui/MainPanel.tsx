@@ -211,8 +211,8 @@ export function MainPanel({ settings, onGoToSettings }: Props) {
     <div className="main-panel">
       {!hasApiKey && (
         <div className="banner">
-          AI naming needs a {provider === 'claude' ? 'Claude' : 'Gemini'} API key. Structural fixes work without it.
-          <button className="link" onClick={onGoToSettings}>Add key</button>
+          AI naming and icon search need a <strong>Claude</strong> (Anthropic) or <strong>Gemini</strong> (Google) API key. Structural fixes work without it.
+          <button className="link" onClick={onGoToSettings}>Add API key →</button>
         </div>
       )}
 

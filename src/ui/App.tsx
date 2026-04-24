@@ -39,6 +39,14 @@ export function App() {
     send({ type: 'save-settings', payload: next });
   }
 
+  const iconsEnabled = Boolean(
+    settings && (settings.geminiApiKey.trim() || settings.claudeApiKey.trim()),
+  );
+
+  useEffect(() => {
+    if (!iconsEnabled && tab === 'icons') setTab('main');
+  }, [iconsEnabled, tab]);
+
   return (
     <div className="app">
       <header className="header">
@@ -50,7 +58,12 @@ export function App() {
         <button className={tab === 'main' ? 'active' : ''} onClick={() => setTab('main')}>
           Clean up
         </button>
-        <button className={tab === 'icons' ? 'active' : ''} onClick={() => setTab('icons')}>
+        <button
+          className={tab === 'icons' ? 'active' : ''}
+          onClick={() => iconsEnabled && setTab('icons')}
+          disabled={!iconsEnabled}
+          title={iconsEnabled ? 'AI icon search' : 'Add an API key in Settings to enable Icons'}
+        >
           Icons
         </button>
         <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>
@@ -62,7 +75,7 @@ export function App() {
         {tab === 'main' ? (
           <MainPanel settings={settings} onGoToSettings={() => setTab('settings')} />
         ) : tab === 'icons' ? (
-          <IconsPanel settings={settings} onGoToSettings={() => setTab('settings')} />
+          <IconsPanel settings={settings} />
         ) : settings ? (
           <div className="settings-scroll">
             <SettingsPanel settings={settings} onSave={handleSave} />

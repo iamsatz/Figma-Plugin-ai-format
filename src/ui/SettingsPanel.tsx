@@ -23,6 +23,16 @@ export function SettingsPanel({ settings, onSave }: Props) {
 
   const canSave = !gridError && !tokensError && !thresholdError;
 
+  // Reflects the SAVED state (from props), not the draft — so the status pill
+  // tells the user whether they have a key on record, not whether the text box
+  // currently contains characters.
+  const hasSavedKey =
+    (settings.aiProvider === 'gemini' && settings.geminiApiKey.trim().length > 0) ||
+    (settings.aiProvider === 'claude' && settings.claudeApiKey.trim().length > 0);
+
+  const [apiOpen, setApiOpen] = useState(!hasSavedKey);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+
   function handleSave() {
     if (!canSave) return;
     const grid = parseGrid(gridPx).value!;
@@ -47,104 +57,152 @@ export function SettingsPanel({ settings, onSave }: Props) {
 
   return (
     <div>
-      <div className="field">
-        <label htmlFor="provider">AI provider</label>
-        <select
-          id="provider"
-          value={aiProvider}
-          onChange={(e) => setAiProvider(e.target.value as AiProvider)}
-        >
-          <option value="gemini">Gemini 2.5 Flash</option>
-          <option value="claude">Claude Haiku 4.5</option>
-        </select>
-        <span className="hint">Used for layer naming and icon suggestions.</span>
-      </div>
+      <Section
+        title="AI provider & API key"
+        open={apiOpen}
+        onToggle={() => setApiOpen((v) => !v)}
+        status={
+          hasSavedKey
+            ? { kind: 'ok', label: 'Key saved' }
+            : { kind: 'warn', label: 'Add a key' }
+        }
+      >
+        <div className="field">
+          <label htmlFor="provider">Provider</label>
+          <select
+            id="provider"
+            value={aiProvider}
+            onChange={(e) => setAiProvider(e.target.value as AiProvider)}
+          >
+            <option value="gemini">Gemini 2.5 Flash (Google)</option>
+            <option value="claude">Claude Haiku 4.5 (Anthropic)</option>
+          </select>
+          <span className="hint">Used for layer naming and icon search.</span>
+        </div>
 
-      <div className={`field${aiProvider !== 'gemini' ? ' inactive' : ''}`}>
-        <label htmlFor="gemini-key">Gemini API key</label>
-        <input
-          id="gemini-key"
-          type="password"
-          placeholder="AIza..."
-          value={geminiApiKey}
-          onChange={(e) => setGeminiApiKey(e.target.value)}
-          autoComplete="off"
-        />
-        <span className="hint">
-          Get one at <em>aistudio.google.com/app/apikey</em>. Stored locally in figma.clientStorage.
-        </span>
-      </div>
+        <div className={`field${aiProvider !== 'gemini' ? ' inactive' : ''}`}>
+          <label htmlFor="gemini-key">Gemini API key</label>
+          <input
+            id="gemini-key"
+            type="password"
+            placeholder="AIza..."
+            value={geminiApiKey}
+            onChange={(e) => setGeminiApiKey(e.target.value)}
+            autoComplete="off"
+          />
+          <span className="hint">
+            Free key at <em>aistudio.google.com/app/apikey</em>. Stored locally.
+          </span>
+        </div>
 
-      <div className={`field${aiProvider !== 'claude' ? ' inactive' : ''}`}>
-        <label htmlFor="claude-key">Claude API key</label>
-        <input
-          id="claude-key"
-          type="password"
-          placeholder="sk-ant-..."
-          value={claudeApiKey}
-          onChange={(e) => setClaudeApiKey(e.target.value)}
-          autoComplete="off"
-        />
-        <span className="hint">
-          Get one at <em>console.anthropic.com</em>.
-        </span>
-      </div>
+        <div className={`field${aiProvider !== 'claude' ? ' inactive' : ''}`}>
+          <label htmlFor="claude-key">Claude API key</label>
+          <input
+            id="claude-key"
+            type="password"
+            placeholder="sk-ant-..."
+            value={claudeApiKey}
+            onChange={(e) => setClaudeApiKey(e.target.value)}
+            autoComplete="off"
+          />
+          <span className="hint">
+            Get one at <em>console.anthropic.com</em>. Stored locally.
+          </span>
+        </div>
+      </Section>
 
-      <div className="field">
-        <label htmlFor="grid">Grid (px)</label>
-        <input
-          id="grid"
-          type="number"
-          min={1}
-          value={gridPx}
-          onChange={(e) => setGridPx(e.target.value)}
-        />
-        <span className="hint">Spacing will snap to multiples of this value when no tokens are set.</span>
-        {gridError && <span className="error">{gridError}</span>}
-      </div>
+      <Section
+        title="Cleanup preferences"
+        open={cleanupOpen}
+        onToggle={() => setCleanupOpen((v) => !v)}
+      >
+        <div className="field">
+          <label htmlFor="grid">Grid (px)</label>
+          <input
+            id="grid"
+            type="number"
+            min={1}
+            value={gridPx}
+            onChange={(e) => setGridPx(e.target.value)}
+          />
+          <span className="hint">Spacing snaps to multiples of this when no tokens are set.</span>
+          {gridError && <span className="error">{gridError}</span>}
+        </div>
 
-      <div className="field">
-        <label htmlFor="tokens">Spacing tokens (JSON, optional)</label>
-        <textarea
-          id="tokens"
-          placeholder='{ "xs": 4, "sm": 8, "md": 16 }'
-          value={tokensText}
-          onChange={(e) => setTokensText(e.target.value)}
-        />
-        <span className="hint">If set, spacing snaps to the nearest token value instead of grid multiples.</span>
-        {tokensError && <span className="error">{tokensError}</span>}
-      </div>
+        <div className="field">
+          <label htmlFor="tokens">Spacing tokens (JSON, optional)</label>
+          <textarea
+            id="tokens"
+            placeholder='{ "xs": 4, "sm": 8, "md": 16 }'
+            value={tokensText}
+            onChange={(e) => setTokensText(e.target.value)}
+          />
+          <span className="hint">If set, spacing snaps to the nearest token value instead of grid multiples.</span>
+          {tokensError && <span className="error">{tokensError}</span>}
+        </div>
 
-      <div className="field">
-        <label htmlFor="ignore">Ignore patterns (one regex per line)</label>
-        <textarea
-          id="ignore"
-          value={ignoreText}
-          onChange={(e) => setIgnoreText(e.target.value)}
-        />
-        <span className="hint">Layers whose names match any pattern are skipped. Locked layers are also skipped.</span>
-      </div>
+        <div className="field">
+          <label htmlFor="ignore">Ignore patterns (one regex per line)</label>
+          <textarea
+            id="ignore"
+            value={ignoreText}
+            onChange={(e) => setIgnoreText(e.target.value)}
+          />
+          <span className="hint">Layers whose names match any pattern are skipped. Locked layers are also skipped.</span>
+        </div>
 
-      <div className="field">
-        <label htmlFor="threshold">Confidence threshold (0–1)</label>
-        <input
-          id="threshold"
-          type="number"
-          min={0}
-          max={1}
-          step={0.05}
-          value={thresholdText}
-          onChange={(e) => setThresholdText(e.target.value)}
-        />
-        <span className="hint">Below this score, fixes are flagged as Review and left unchecked.</span>
-        {thresholdError && <span className="error">{thresholdError}</span>}
-      </div>
+        <div className="field">
+          <label htmlFor="threshold">Confidence threshold (0–1)</label>
+          <input
+            id="threshold"
+            type="number"
+            min={0}
+            max={1}
+            step={0.05}
+            value={thresholdText}
+            onChange={(e) => setThresholdText(e.target.value)}
+          />
+          <span className="hint">Below this score, fixes are flagged as Review and left unchecked.</span>
+          {thresholdError && <span className="error">{thresholdError}</span>}
+        </div>
+      </Section>
 
       <div className="actions">
         <button className="primary" disabled={!canSave} onClick={handleSave}>
           Save
         </button>
       </div>
+    </div>
+  );
+}
+
+type SectionStatus = { kind: 'ok' | 'warn'; label: string };
+
+function Section(props: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  status?: SectionStatus;
+  children: React.ReactNode;
+}) {
+  const { title, open, onToggle, status, children } = props;
+  return (
+    <div className="settings-section">
+      <button
+        type="button"
+        className="settings-section-header"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span className="chevron" aria-hidden>{open ? '▾' : '▸'}</span>
+        <span className="settings-section-title">{title}</span>
+        {status && (
+          <span className={`settings-section-status settings-section-status--${status.kind}`}>
+            {status.label}
+          </span>
+        )}
+      </button>
+      {open && <div className="settings-section-body">{children}</div>}
     </div>
   );
 }

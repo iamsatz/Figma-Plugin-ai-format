@@ -17,17 +17,15 @@ import type { Settings } from '../core/types';
 
 type Props = {
   settings: Settings | null;
-  onGoToSettings: () => void;
 };
 
-export function IconsPanel({ settings, onGoToSettings }: Props) {
+export function IconsPanel({ settings }: Props) {
   const [, forceRender] = useState({});
   const store = getIconsStore();
   const { query, panelState: state, seen } = store;
   const abortRef = useRef<AbortController | null>(null);
 
   const provider = settings?.aiProvider ?? 'gemini';
-  const providerLabel = provider === 'claude' ? 'Claude Haiku 4.5' : 'Gemini 2.5 Flash';
   const apiKey = provider === 'claude' ? settings?.claudeApiKey?.trim() : settings?.geminiApiKey?.trim();
   const hasApiKey = Boolean(apiKey);
 
@@ -114,19 +112,12 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
 
   return (
     <div className="icons-panel">
-      {!hasApiKey && (
-        <div className="banner">
-          Icon suggestions need a {provider === 'claude' ? 'Claude' : 'Gemini'} API key.
-          <button className="link" onClick={onGoToSettings}>Add key</button>
-        </div>
-      )}
-
       <form className="icons-search" onSubmit={handleSubmit}>
         <input
           type="text"
           value={query}
           onChange={(e) => storeSetQuery(e.target.value)}
-          placeholder="Describe an icon — e.g. 'user profile', 'cart', 'settings'"
+          placeholder="Describe an icon — e.g. 'shopping cart', 'settings gear'"
           disabled={!hasApiKey || isSearching}
           aria-label="Icon search"
         />
@@ -139,15 +130,11 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
         </button>
       </form>
 
-      {hasApiKey && (
-        <div className="icons-provider-note">via {providerLabel}</div>
-      )}
-
       <div className="icons-body">
         {state.kind === 'idle' && (
           <div className="empty">
             <h2>Find an icon</h2>
-            <p>Describe what you need. Click a result to place it on the canvas.</p>
+            <p>Describe what you need. AI picks the 4 closest matches; click to drop on the canvas.</p>
           </div>
         )}
 
@@ -160,33 +147,21 @@ export function IconsPanel({ settings, onGoToSettings }: Props) {
         )}
 
         {currentResults && (
-          <>
-            <div className="icons-grid" aria-busy={isSearching}>
-              {currentResults.names.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  className="icon-card"
-                  onClick={() => insert(name, currentResults.svgs[name])}
-                  aria-label={`Insert ${name}`}
-                  title={`Insert ${name}`}
-                >
-                  <span className="icon-preview" aria-hidden dangerouslySetInnerHTML={{ __html: currentResults.svgs[name] }} />
-                  <span className="icon-name">{name}</span>
-                </button>
-              ))}
-            </div>
-            {state.kind === 'results' && (
+          <div className="icons-grid" aria-busy={isSearching}>
+            {currentResults.names.map((name) => (
               <button
+                key={name}
                 type="button"
-                className="secondary icons-more"
-                onClick={() => search(false)}
-                disabled={isSearching}
+                className="icon-card"
+                onClick={() => insert(name, currentResults.svgs[name])}
+                aria-label={`Insert ${name}`}
+                title={`Insert ${name}`}
               >
-                {isSearching ? 'Loading…' : 'Show 4 more'}
+                <span className="icon-preview" aria-hidden dangerouslySetInnerHTML={{ __html: currentResults.svgs[name] }} />
+                <span className="icon-name">{name}</span>
               </button>
-            )}
-          </>
+            ))}
+          </div>
         )}
 
         {state.kind === 'error' && (
