@@ -1,4 +1,4 @@
-# Layercraft — project notes for Claude Code
+# Restructure — project notes for Claude Code
 
 ## What this is
 

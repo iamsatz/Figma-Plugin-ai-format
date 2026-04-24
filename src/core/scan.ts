@@ -91,7 +91,7 @@ async function collectRenameCandidates(
         tree,
       });
     } catch (err) {
-      console.warn('[layercraft] failed to build rename candidate for', root.id, err);
+      console.warn('[restructure] failed to build rename candidate for', root.id, err);
       skipped++;
     }
   }

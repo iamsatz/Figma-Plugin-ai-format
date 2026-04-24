@@ -56,9 +56,9 @@ if (watch) {
             if (result.errors.length === 0) {
               try {
                 await buildHtml();
-                console.log('[layercraft] ui.html rebuilt');
+                console.log('[restructure] ui.html rebuilt');
               } catch (err) {
-                console.error('[layercraft] html inline failed:', err);
+                console.error('[restructure] html inline failed:', err);
               }
             }
           });
@@ -67,7 +67,7 @@ if (watch) {
     ],
   });
   await Promise.all([sandboxCtx.watch(), uiCtx.watch()]);
-  console.log('[layercraft] watching for changes...');
+  console.log('[restructure] watching for changes...');
 } else {
   await Promise.all([esbuild.build(sandboxOptions), esbuild.build(uiOptions)]);
   await buildHtml();
@@ -76,5 +76,5 @@ if (watch) {
   if (existsSync('assets/icon.svg')) {
     await cp('assets/icon.svg', path.join(outdir, 'icon.svg'));
   }
-  console.log('[layercraft] build complete');
+  console.log('[restructure] build complete');
 }

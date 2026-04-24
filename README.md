@@ -1,4 +1,4 @@
-# Layercraft
+# Restructure
 
 Personal Figma plugin that cleans up **layer structure** — names, Auto Layout, spacing, and child order — without touching any visual design. Cuts handoff prep from 10–20 min to under 30 sec per screen.
 
@@ -24,7 +24,7 @@ Then in Figma desktop:
 
 1. **Plugins → Development → Import plugin from manifest…**
 2. Pick `manifest.json` in this folder.
-3. Run **Layercraft** from the Plugins menu.
+3. Run **Restructure** from the Plugins menu.
 
 For iterative development:
 
@@ -47,7 +47,7 @@ Without a key, structural fixes (AL inference, spacing snap, reorder) still work
 ## Usage
 
 1. Select one or more frames (or choose Page / File scope).
-2. Click **Scan**. Layercraft walks the layer tree and proposes fixes.
+2. Click **Scan**. Restructure walks the layer tree and proposes fixes.
 3. AI naming runs in the background — watch the naming bar.
 4. Review the fix list. High-confidence fixes are pre-checked; Review-tier items are unchecked.
 5. Click **Apply Selected** or **Apply High** (applies all High-confidence fixes at once).

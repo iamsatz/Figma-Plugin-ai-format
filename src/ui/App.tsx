@@ -18,7 +18,7 @@ export function App() {
     const unsub = subscribe((msg) => {
       if (msg.type === 'settings') setSettings(msg.payload);
       else if (msg.type === 'settings-saved') flashToast('Settings saved');
-      else if (msg.type === 'pong') console.log('[layercraft] pong from sandbox');
+      else if (msg.type === 'pong') console.log('[restructure] pong from sandbox');
       else if (msg.type === 'error') flashToast(msg.message);
       else if (msg.type === 'insert-svg-result') {
         if (msg.error) flashToast(`Insert failed: ${msg.error}`);
@@ -43,7 +43,7 @@ export function App() {
     <div className="app">
       <header className="header">
         <span className="logo" dangerouslySetInnerHTML={{ __html: iconSvg }} />
-        <h1>Layercraft</h1>
+        <h1>Restructure</h1>
       </header>
 
       <nav className="tabs">

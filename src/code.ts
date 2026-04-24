@@ -29,7 +29,7 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
         send({ type: 'scan-progress', phase: 'walking' });
         const result = await scan(msg.scope, settings);
         lastFixesById = new Map(result.fixes.map((f) => [f.id, f]));
-        console.log('[layercraft] scan', result.stats, result.fixes.length, 'fixes,', result.renameCandidates.length, 'rename candidates');
+        console.log('[restructure] scan', result.stats, result.fixes.length, 'fixes,', result.renameCandidates.length, 'rename candidates');
         send({
           type: 'scan-result',
           fixes: result.fixes,

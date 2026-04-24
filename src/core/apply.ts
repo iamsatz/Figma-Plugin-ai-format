@@ -29,7 +29,7 @@ export async function applyFixes(fixes: Fix[]): Promise<ApplyResult> {
       applied.push(fix.id);
     } catch (err) {
       failed.push(fix.id);
-      console.warn('[layercraft] failed to apply fix', fix.id, err);
+      console.warn('[restructure] failed to apply fix', fix.id, err);
     }
   }
 
