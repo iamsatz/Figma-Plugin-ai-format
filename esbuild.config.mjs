@@ -12,7 +12,10 @@ const commonOptions = {
   bundle: true,
   format: 'iife',
   platform: 'browser',
-  target: 'es2020',
+  // Figma's plugin sandbox (QuickJS) rejects optional chaining (?.) and
+  // nullish coalescing (??) with "Syntax error: Unexpected token ?" on some
+  // versions. Target es2017 so esbuild lowers these operators.
+  target: 'es2017',
   logLevel: 'info',
   sourcemap: watch ? 'inline' : false,
   minify: !watch,
